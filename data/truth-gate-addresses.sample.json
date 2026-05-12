@@ -1,0 +1,17 @@
+[
+  {
+    "label": "Suffolk sample 1",
+    "singleLine": "100 Main St, Huntington, NY 11743",
+    "county": "Suffolk"
+  },
+  {
+    "label": "Suffolk sample 2",
+    "singleLine": "1 Independence Hill, Farmingville, NY 11738",
+    "county": "Suffolk"
+  },
+  {
+    "label": "Nassau sample 1",
+    "singleLine": "1 West St, Mineola, NY 11501",
+    "county": "Nassau"
+  }
+]

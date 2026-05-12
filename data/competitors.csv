@@ -1,0 +1,11 @@
+service_slug,competitor_name,zip_or_region,price_low,price_median,price_high,unit,source_url,observed_date
+house-wash,Window Hero Huntington,11743,375,525,700,standard home,manual observation,2026-05-07
+house-wash,Ro-Flow Exterior Cleaning,Suffolk County,350,500,725,standard home,manual observation,2026-05-07
+house-wash,Elite Power Cleaning,Long Island,325,475,650,standard home,manual observation,2026-05-07
+house-wash,Regional exterior cleaning median,Nassau County,375,550,750,standard home,manual observation,2026-05-07
+window-cleaning,Window Hero Huntington,11743,250,375,550,35 windows,manual observation,2026-05-07
+window-cleaning,Long Island window cleaning median,Long Island,225,350,525,35 windows,manual observation,2026-05-07
+window-cleaning,Nassau residential window median,Nassau County,275,425,625,35 windows,manual observation,2026-05-07
+roof-wash,Suffolk soft wash median,Suffolk County,575,825,1200,standard roof,manual observation,2026-05-07
+roof-wash,Nassau soft wash median,Nassau County,650,900,1350,standard roof,manual observation,2026-05-07
+roof-wash,Long Island roof wash median,Long Island,600,850,1250,standard roof,manual observation,2026-05-07
