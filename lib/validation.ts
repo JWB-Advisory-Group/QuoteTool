@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  MAX_PHOTO_DATA_URL_CHARS,
+  MAX_QUOTE_PHOTOS,
+} from "@/lib/photo-limits";
 
 const CONTROL_CHARS = /\p{Cc}/gu;
 
@@ -86,7 +90,7 @@ const serviceDetailsSchema = z.object({
 const photoAttachmentSchema = z.object({
   id: z.string().trim().min(1).max(64),
   name: z.string().trim().min(1).max(120),
-  dataUrl: z.string().startsWith("data:image/").max(2_600_000),
+  dataUrl: z.string().startsWith("data:image/").max(MAX_PHOTO_DATA_URL_CHARS),
 });
 
 const preferredWindowSchema = z.object({
@@ -174,7 +178,7 @@ export const quoteRequestSchema = z.object({
     access: [],
     windowDetails: [],
   }),
-  photoAttachments: z.array(photoAttachmentSchema).max(6).default([]),
+  photoAttachments: z.array(photoAttachmentSchema).max(MAX_QUOTE_PHOTOS).default([]),
   preferredWindows: z.array(preferredWindowSchema).max(3).default([]),
   notes: cleanOptional(2000),
 }).superRefine((data, ctx) => {
@@ -235,7 +239,7 @@ export const requestPhotosSchema = z.object({
 });
 
 export const quotePhotosSchema = z.object({
-  photoAttachments: z.array(photoAttachmentSchema).min(1).max(6),
+  photoAttachments: z.array(photoAttachmentSchema).min(1).max(MAX_QUOTE_PHOTOS),
 });
 
 export const followUpSchema = z.object({

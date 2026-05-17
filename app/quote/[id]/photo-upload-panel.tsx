@@ -18,6 +18,7 @@ import {
   clientPhotosToAttachments,
   readPhoto,
 } from "@/app/quote/photo-pipeline";
+import { MAX_QUOTE_PHOTOS } from "@/lib/photo-limits";
 
 type UploadStatus = "idle" | "processing" | "uploading" | "success" | "error";
 
@@ -42,7 +43,7 @@ export function PhotoUploadPanel({
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [message, setMessage] = useState("");
   const photosRef = useRef<ClientPhoto[]>([]);
-  const photoSelectionLimit = Math.max(0, 6 - photoCount);
+  const photoSelectionLimit = Math.max(0, MAX_QUOTE_PHOTOS - photoCount);
   const remainingSlots = Math.max(0, photoSelectionLimit - photos.length);
   const maxAddNow = Math.min(4, remainingSlots);
   const hasAttachedPhotos = photoCount > 0;

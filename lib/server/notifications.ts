@@ -12,7 +12,10 @@ import { formatMoney } from "@/lib/format";
 import { businessProfile, getPublicAppUrl } from "@/lib/business";
 import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
 
-const logPath = path.join(process.cwd(), ".data", "notification-log.jsonl");
+const logDir = process.env.VERCEL || process.env.VERCEL_ENV
+  ? path.join("/tmp", "quote-tool")
+  : path.join(process.cwd(), ".data");
+const logPath = path.join(logDir, "notification-log.jsonl");
 
 async function logNotification(payload: Record<string, unknown>) {
   await mkdir(path.dirname(logPath), { recursive: true });

@@ -2,7 +2,20 @@
 
 ## Runtime
 
-The app runs locally with a file-backed store at `.data/pricing-agent.json`. That makes V1 usable immediately for testing. For production, move the same core tables to Supabase using `supabase/migrations/00001_initial.sql` and swap `lib/server/store.ts` for a Supabase-backed adapter.
+The app runs locally with a file-backed store at `.data/pricing-agent.json`.
+That makes V1 usable immediately for testing. On Vercel, the app now avoids
+writing to the read-only deployment filesystem and uses `/tmp/quote-tool` only
+as a temporary fallback.
+
+For real production use, configure Supabase:
+
+1. Create a Supabase project.
+2. Run `supabase/migrations/00001_initial.sql`.
+3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel.
+
+When those env vars are set, `lib/server/store.ts` uses Supabase Postgres for
+leads, estimates, outcomes, and cost inputs. Without them, Vercel can render
+the app, but leads are not durable across serverless instances.
 
 Local development seeds demo leads when the queue is empty. Set `DEMO_QUOTES=off`
 in any shared/staging environment where seeded leads would create confusion.
@@ -15,6 +28,8 @@ Copy `.env.example` to `.env.local`.
 - Set `DASHBOARD_PIN` before exposing the app publicly.
 - Set `CRON_SECRET` if `/api/cron` should reject unauthenticated calls.
 - Vercel Hobby cron is configured once daily in `vercel.json`.
+- Set `NEXT_PUBLIC_APP_URL` to the production domain so customer/owner links do
+  not point back to localhost.
 
 ## Vendor Guardrails
 
@@ -27,6 +42,8 @@ Copy `.env.example` to `.env.local`.
 
 - Submit 10 test quotes through `/quote`.
 - Submit at least one quote without photos, then upload 2-4 photos from `/quote/[id]#photos`.
+- Visit `/api/health` on the deployed URL and confirm `storage.readyForProduction`
+  is `true`.
 - Confirm no quote can be sent below `estimate.floorBandHigh`.
 - Confirm notification log or live SMS/email receives customer and Dante messages.
 - Log `WON 625`, `LOST`, and `NO RESPONSE` through dashboard or Twilio webhook.

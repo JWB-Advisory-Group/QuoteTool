@@ -28,6 +28,7 @@ import type {
 } from "@/lib/types";
 import { urgencyOptions } from "@/lib/pricing";
 import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
+import { MAX_QUOTE_PHOTOS } from "@/lib/photo-limits";
 import {
   type ClientPhoto,
   type PhotoReadResult,
@@ -329,9 +330,11 @@ export function QuoteForm({ services }: { services: Service[] }) {
     setPhotoMessage("");
     if (!files) return;
     const incoming = Array.from(files);
-    const remaining = Math.max(0, 6 - form.photoAttachments.length);
+    const remaining = Math.max(0, MAX_QUOTE_PHOTOS - form.photoAttachments.length);
     if (remaining === 0) {
-      setPhotoMessage("Photo limit reached (6). Remove one to add another.");
+      setPhotoMessage(
+        `Photo limit reached (${MAX_QUOTE_PHOTOS}). Remove one to add another.`,
+      );
       return;
     }
     const overflow = incoming.length - remaining;
@@ -348,7 +351,10 @@ export function QuoteForm({ services }: { services: Service[] }) {
 
     setForm((current) => ({
       ...current,
-      photoAttachments: [...current.photoAttachments, ...photos].slice(0, 6),
+      photoAttachments: [...current.photoAttachments, ...photos].slice(
+        0,
+        MAX_QUOTE_PHOTOS,
+      ),
     }));
 
     if (failures.length === 0 && overflow <= 0) {
@@ -361,7 +367,9 @@ export function QuoteForm({ services }: { services: Service[] }) {
     }
 
     const overflowNote =
-      overflow > 0 ? `Photo limit is 6 — ${overflow} extra skipped.` : "";
+      overflow > 0
+        ? `Photo limit is ${MAX_QUOTE_PHOTOS} - ${overflow} extra skipped.`
+        : "";
     const failureNote = failures
       .map((failure) => `${failure.name}: ${failure.reason}`)
       .join(" · ");

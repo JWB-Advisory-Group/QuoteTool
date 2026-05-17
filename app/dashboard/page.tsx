@@ -32,6 +32,7 @@ import { dashboardAuthEnabled, isDashboardAuthed } from "@/lib/server/auth";
 import {
   getCompliance,
   getSourceRoi,
+  getStorageHealth,
   isQuoteExpired,
   loadStore,
 } from "@/lib/server/store";
@@ -55,6 +56,7 @@ export default async function DashboardPage({
   const compliance14 = getCompliance(store, 14);
   const unlock = getAiUnlockState(store);
   const notificationHealth = getNotificationHealth();
+  const storageHealth = getStorageHealth();
   const sourceRoi = getSourceRoi(store);
   const pending = store.quotes.filter((quote) =>
     quote.status === "pending" || quote.status === "contacted",
@@ -148,6 +150,33 @@ export default async function DashboardPage({
             </Link>
           </div>
         </header>
+
+        {storageHealth.mode !== "local_file" && !storageHealth.readyForProduction ? (
+          <details className="group mb-5 rounded-lg border border-[#f1d18a] bg-[#fff8e5]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#7a5400]">
+                <AlertTriangle size={16} />
+                {storageHealth.durable
+                  ? "Local file storage active"
+                  : "Vercel storage is temporary until Supabase is configured"}
+              </div>
+              <ChevronRight
+                size={16}
+                className="text-[#7a5400] transition-transform group-open:rotate-90"
+              />
+            </summary>
+            <div className="border-t border-[#f1d18a] px-4 py-3">
+              <p className="text-sm leading-6 text-[#62685f]">
+                {storageHealth.ownerAction}
+              </p>
+              {storageHealth.missing.length > 0 ? (
+                <p className="mt-2 text-xs font-semibold text-[#7a5400]">
+                  {`Missing: ${storageHealth.missing.join(", ")}`}
+                </p>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
 
         {!notificationHealth.ready ? (
           <details className="group mb-5 rounded-lg border border-[#f5b3b0] bg-[#fff5f5]">

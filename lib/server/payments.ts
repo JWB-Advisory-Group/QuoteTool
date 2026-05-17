@@ -6,7 +6,10 @@ import path from "node:path";
 import { businessProfile, getPublicAppUrl } from "@/lib/business";
 import type { ApprovalRecord, Quote } from "@/lib/types";
 
-const logPath = path.join(process.cwd(), ".data", "payment-log.jsonl");
+const logDir = process.env.VERCEL || process.env.VERCEL_ENV
+  ? path.join("/tmp", "quote-tool")
+  : path.join(process.cwd(), ".data");
+const logPath = path.join(logDir, "payment-log.jsonl");
 
 async function logPayment(payload: Record<string, unknown>) {
   await mkdir(path.dirname(logPath), { recursive: true });

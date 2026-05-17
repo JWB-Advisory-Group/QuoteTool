@@ -9,7 +9,9 @@ import { fitCostInputFromActuals, shouldRefit } from "@/lib/calibration";
 import type {
   AppStore,
   ApprovalRecord,
+  CompetitorPrice,
   CostInput,
+  DecisionLogEntry,
   DuplicateContext,
   DuplicateMatch,
   FollowUpChannel,
@@ -27,15 +29,51 @@ import type {
 } from "@/lib/types";
 import { seedStore } from "@/lib/server/seeds";
 import { buildDemoLeads, shouldSeedDemoLeads } from "@/lib/server/demo-leads";
+import { MAX_QUOTE_PHOTOS } from "@/lib/photo-limits";
 
 const QUOTE_EXPIRY_DAYS = 7;
 const DUPLICATE_LOOKBACK_DAYS = 30;
 const REPEAT_LOOKBACK_DAYS = 540;
 
-const dataDir = path.join(process.cwd(), ".data");
+const vercelRuntime = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+const dataDir = vercelRuntime
+  ? path.join("/tmp", "quote-tool")
+  : path.join(process.cwd(), ".data");
 const storePath = process.env.LOCAL_DATA_PATH
   ? path.resolve(process.env.LOCAL_DATA_PATH)
   : path.join(dataDir, "pricing-agent.json");
+
+function supabaseConfig() {
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+  return url && serviceRoleKey ? { url: url.replace(/\/+$/, ""), serviceRoleKey } : null;
+}
+
+export function getStorageHealth() {
+  const supabase = supabaseConfig();
+  const mode = supabase
+    ? "supabase"
+    : vercelRuntime
+      ? "vercel_ephemeral_file"
+      : "local_file";
+  const durable = Boolean(supabase) || !vercelRuntime;
+  return {
+    mode,
+    durable,
+    readyForProduction: Boolean(supabase),
+    missing:
+      supabase || !vercelRuntime
+        ? []
+        : ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
+    path: supabase ? "Supabase Postgres" : storePath,
+    ownerAction: supabase
+      ? "Persistent production storage is configured."
+      : vercelRuntime
+        ? "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel before live traffic. The app can render, but writes use temporary serverless storage and can disappear."
+        : "Local file storage is active for development.",
+  };
+}
 
 async function ensureDataDir() {
   await mkdir(path.dirname(storePath), { recursive: true });
@@ -342,7 +380,390 @@ function normalizeStore(store: AppStore): AppStore {
   return normalized;
 }
 
+type ServiceRow = {
+  slug: string;
+  name: string;
+  short_name: string;
+  description: string;
+  quote_mode: Service["quoteMode"];
+  unit: Service["unit"];
+  unit_label: string;
+  size_label: string;
+  size_options: Service["sizeOptions"];
+};
+
+type CostInputRow = {
+  service_slug: string;
+  hourly_labor_rate: number | string;
+  material_cost_per_unit: number | string;
+  equipment_wear_per_hour: number | string;
+  hours_per_unit: number | string;
+  drive_reserve_minutes: number | string;
+  overhead_pct: number | string;
+  min_margin_pct: number | string;
+  service_minimum: number | string;
+  deposit_threshold: number | string;
+  buffer_active: boolean;
+  source: CostInput["source"];
+  updated_at: string;
+};
+
+type CompetitorPriceRow = {
+  id: string;
+  service_slug: string;
+  competitor_name: string;
+  zip_or_region: string;
+  price_low: number | string;
+  price_median: number | string;
+  price_high: number | string;
+  unit: string;
+  source_url: string;
+  observed_date: string;
+};
+
+type QuoteRow = {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  preferred_contact_method: Quote["preferredContactMethod"];
+  source: string;
+  property_type: Quote["propertyType"];
+  address_street: string;
+  address_city: string;
+  address_zip: string;
+  service_slug: string;
+  job_size: number | string;
+  job_size_label: string;
+  service_lines: Quote["serviceLines"];
+  stories: number;
+  urgency: string;
+  risk_profile: Quote["riskProfile"];
+  service_details: Quote["serviceDetails"];
+  photo_attachments: Quote["photoAttachments"];
+  preferred_windows: Quote["preferredWindows"];
+  notes: string | null;
+  internal_notes: string;
+  status: Quote["status"];
+  estimate: Quote["estimate"];
+  final_quote_amount: number | string | null;
+  send_review: Quote["sendReview"];
+  follow_ups: Quote["followUps"];
+  sent_at: string | null;
+  outcome_check_date: string | null;
+  approval: Quote["approval"];
+  photos_requested_at: string | null;
+  expires_at: string | null;
+  duplicate_context: Quote["duplicateContext"];
+  created_at: string;
+  updated_at: string;
+};
+
+type OutcomeRow = {
+  id: string;
+  quote_id: string;
+  outcome: Outcome["outcome"];
+  amount: number | string | null;
+  amount_explicit: boolean;
+  source: Outcome["source"];
+  notes: string | null;
+  actuals: Outcome["actuals"];
+  created_at: string;
+};
+
+type DecisionLogRow = {
+  id: string;
+  event: string;
+  evidence: string;
+  next_review: string;
+  created_at: string;
+};
+
+function asNumber(value: number | string | null | undefined, fallback = 0) {
+  if (typeof value === "number") return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function supabaseRequest<T>(
+  pathName: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const config = supabaseConfig();
+  if (!config) throw new Error("Supabase storage is not configured.");
+  const response = await fetch(`${config.url}/rest/v1/${pathName}`, {
+    ...init,
+    headers: {
+      apikey: config.serviceRoleKey,
+      Authorization: `Bearer ${config.serviceRoleKey}`,
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Supabase ${pathName} failed: ${response.status} ${body}`);
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+async function supabaseUpsert(
+  table: string,
+  rows: Record<string, unknown>[],
+  conflictTarget: string,
+) {
+  if (rows.length === 0) return;
+  await supabaseRequest<void>(`${table}?on_conflict=${conflictTarget}`, {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(rows),
+  });
+}
+
+function serviceFromRow(row: ServiceRow): Service {
+  return {
+    slug: row.slug,
+    name: row.name,
+    shortName: row.short_name,
+    description: row.description,
+    quoteMode: row.quote_mode,
+    unit: row.unit,
+    unitLabel: row.unit_label,
+    sizeLabel: row.size_label,
+    sizeOptions: row.size_options,
+  };
+}
+
+function serviceToRow(service: Service): ServiceRow {
+  return {
+    slug: service.slug,
+    name: service.name,
+    short_name: service.shortName,
+    description: service.description,
+    quote_mode: service.quoteMode,
+    unit: service.unit,
+    unit_label: service.unitLabel,
+    size_label: service.sizeLabel,
+    size_options: service.sizeOptions,
+  };
+}
+
+function costInputFromRow(row: CostInputRow): CostInput {
+  return {
+    serviceSlug: row.service_slug,
+    hourlyLaborRate: asNumber(row.hourly_labor_rate),
+    materialCostPerUnit: asNumber(row.material_cost_per_unit),
+    equipmentWearPerHour: asNumber(row.equipment_wear_per_hour),
+    hoursPerUnit: asNumber(row.hours_per_unit),
+    driveReserveMinutes: asNumber(row.drive_reserve_minutes),
+    overheadPct: asNumber(row.overhead_pct),
+    minMarginPct: asNumber(row.min_margin_pct),
+    serviceMinimum: asNumber(row.service_minimum),
+    depositThreshold: asNumber(row.deposit_threshold),
+    bufferActive: row.buffer_active,
+    source: row.source,
+    updatedAt: row.updated_at,
+  };
+}
+
+function costInputToRow(input: CostInput): CostInputRow {
+  return {
+    service_slug: input.serviceSlug,
+    hourly_labor_rate: input.hourlyLaborRate,
+    material_cost_per_unit: input.materialCostPerUnit,
+    equipment_wear_per_hour: input.equipmentWearPerHour,
+    hours_per_unit: input.hoursPerUnit,
+    drive_reserve_minutes: input.driveReserveMinutes,
+    overhead_pct: input.overheadPct,
+    min_margin_pct: input.minMarginPct,
+    service_minimum: input.serviceMinimum,
+    deposit_threshold: input.depositThreshold,
+    buffer_active: input.bufferActive,
+    source: input.source,
+    updated_at: input.updatedAt,
+  };
+}
+
+function competitorFromRow(row: CompetitorPriceRow): CompetitorPrice {
+  return {
+    id: row.id,
+    serviceSlug: row.service_slug,
+    competitorName: row.competitor_name,
+    zipOrRegion: row.zip_or_region,
+    priceLow: asNumber(row.price_low),
+    priceMedian: asNumber(row.price_median),
+    priceHigh: asNumber(row.price_high),
+    unit: row.unit,
+    sourceUrl: row.source_url,
+    observedDate: row.observed_date,
+  };
+}
+
+function quoteFromRow(row: QuoteRow): Quote {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone ?? "",
+    preferredContactMethod: row.preferred_contact_method,
+    source: row.source,
+    propertyType: row.property_type,
+    addressStreet: row.address_street,
+    addressCity: row.address_city,
+    addressZip: row.address_zip,
+    serviceSlug: row.service_slug,
+    jobSize: asNumber(row.job_size),
+    jobSizeLabel: row.job_size_label,
+    serviceLines: row.service_lines ?? [],
+    stories: row.stories,
+    urgency: row.urgency,
+    riskProfile: row.risk_profile ?? defaultRiskProfile(),
+    serviceDetails: normalizeServiceDetails(row.service_details),
+    photoAttachments: row.photo_attachments ?? [],
+    preferredWindows: row.preferred_windows ?? [],
+    notes: row.notes ?? "",
+    internalNotes: row.internal_notes ?? "",
+    status: row.status,
+    estimate: row.estimate,
+    finalQuoteAmount:
+      row.final_quote_amount === null ? null : asNumber(row.final_quote_amount),
+    sendReview: row.send_review ?? null,
+    followUps: row.follow_ups ?? [],
+    sentAt: row.sent_at,
+    outcomeCheckDate: row.outcome_check_date,
+    approval: row.approval ?? null,
+    photosRequestedAt: row.photos_requested_at,
+    expiresAt: row.expires_at,
+    duplicateContext: row.duplicate_context ?? emptyDuplicateContext(),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function quoteToRow(quote: Quote): QuoteRow {
+  return {
+    id: quote.id,
+    customer_name: quote.customerName,
+    customer_email: quote.customerEmail,
+    customer_phone: quote.customerPhone || null,
+    preferred_contact_method: quote.preferredContactMethod,
+    source: quote.source,
+    property_type: quote.propertyType,
+    address_street: quote.addressStreet,
+    address_city: quote.addressCity,
+    address_zip: quote.addressZip,
+    service_slug: quote.serviceSlug,
+    job_size: quote.jobSize,
+    job_size_label: quote.jobSizeLabel,
+    service_lines: quote.serviceLines,
+    stories: quote.stories,
+    urgency: quote.urgency,
+    risk_profile: quote.riskProfile,
+    service_details: quote.serviceDetails,
+    photo_attachments: quote.photoAttachments,
+    preferred_windows: quote.preferredWindows,
+    notes: quote.notes,
+    internal_notes: quote.internalNotes,
+    status: quote.status,
+    estimate: quote.estimate,
+    final_quote_amount: quote.finalQuoteAmount,
+    send_review: quote.sendReview,
+    follow_ups: quote.followUps,
+    sent_at: quote.sentAt,
+    outcome_check_date: quote.outcomeCheckDate,
+    approval: quote.approval,
+    photos_requested_at: quote.photosRequestedAt,
+    expires_at: quote.expiresAt,
+    duplicate_context: quote.duplicateContext,
+    created_at: quote.createdAt,
+    updated_at: quote.updatedAt,
+  };
+}
+
+function outcomeFromRow(row: OutcomeRow): Outcome {
+  return {
+    id: row.id,
+    quoteId: row.quote_id,
+    outcome: row.outcome,
+    amount: row.amount === null ? null : asNumber(row.amount),
+    amountExplicit: row.amount_explicit,
+    source: row.source,
+    notes: row.notes ?? "",
+    actuals: row.actuals,
+    createdAt: row.created_at,
+  };
+}
+
+function outcomeToRow(outcome: Outcome): OutcomeRow {
+  return {
+    id: outcome.id,
+    quote_id: outcome.quoteId,
+    outcome: outcome.outcome,
+    amount: outcome.amount,
+    amount_explicit: outcome.amountExplicit,
+    source: outcome.source,
+    notes: outcome.notes,
+    actuals: outcome.actuals,
+    created_at: outcome.createdAt,
+  };
+}
+
+function decisionLogFromRow(row: DecisionLogRow): DecisionLogEntry {
+  return {
+    id: row.id,
+    event: row.event,
+    evidence: row.evidence,
+    nextReview: row.next_review,
+    createdAt: row.created_at,
+  };
+}
+
+async function loadSupabaseStore(): Promise<AppStore> {
+  const [serviceRows, costRows, competitorRows, quoteRows, outcomeRows, logRows] =
+    await Promise.all([
+      supabaseRequest<ServiceRow[]>("services?select=*&order=slug.asc"),
+      supabaseRequest<CostInputRow[]>("cost_inputs?select=*&order=service_slug.asc"),
+      supabaseRequest<CompetitorPriceRow[]>(
+        "competitor_prices?select=*&order=observed_date.desc",
+      ),
+      supabaseRequest<QuoteRow[]>("quotes?select=*&order=created_at.desc"),
+      supabaseRequest<OutcomeRow[]>("outcomes?select=*&order=created_at.desc"),
+      supabaseRequest<DecisionLogRow[]>("decision_log?select=*&order=created_at.desc"),
+    ]);
+
+  return normalizeStore({
+    services:
+      serviceRows.length > 0 ? serviceRows.map(serviceFromRow) : seedStore.services,
+    costInputs:
+      costRows.length > 0 ? costRows.map(costInputFromRow) : seedStore.costInputs,
+    competitorPrices:
+      competitorRows.length > 0
+        ? competitorRows.map(competitorFromRow)
+        : seedStore.competitorPrices,
+    quotes: quoteRows.map(quoteFromRow),
+    outcomes: outcomeRows.map(outcomeFromRow),
+    decisionLog:
+      logRows.length > 0 ? logRows.map(decisionLogFromRow) : seedStore.decisionLog,
+  });
+}
+
+async function saveSupabaseStore(store: AppStore) {
+  await supabaseUpsert("services", store.services.map(serviceToRow), "slug");
+  await supabaseUpsert(
+    "cost_inputs",
+    store.costInputs.map(costInputToRow),
+    "service_slug",
+  );
+  await supabaseUpsert("quotes", store.quotes.map(quoteToRow), "id");
+  await supabaseUpsert("outcomes", store.outcomes.map(outcomeToRow), "id");
+}
+
 export async function loadStore(): Promise<AppStore> {
+  if (supabaseConfig()) {
+    return loadSupabaseStore();
+  }
   await ensureDataDir();
   try {
     const raw = await readFile(storePath, "utf8");
@@ -380,6 +801,10 @@ export async function updateCostInput(
 }
 
 export async function saveStore(store: AppStore) {
+  if (supabaseConfig()) {
+    await saveSupabaseStore(normalizeStore(store));
+    return;
+  }
   await ensureDataDir();
   await writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
 }
@@ -715,7 +1140,7 @@ export async function addQuotePhotos(
     const nextPhotos = [
       ...quote.photoAttachments,
       ...attachments.filter((photo) => !existingIds.has(photo.id)),
-    ].slice(0, 6);
+    ].slice(0, MAX_QUOTE_PHOTOS);
 
     quote.photoAttachments = nextPhotos;
     quote.estimate = calculateEstimate(store, {

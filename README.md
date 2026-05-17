@@ -47,7 +47,11 @@ Use the same trick for other channels:
 
 ## Required environment
 
-Notifications fall back **silently** to a JSONL log at `.data/notification-log.jsonl` when env vars are missing. That means a misconfigured deploy can look like the app is working when no one is being notified. Tail that file after the first live submission to confirm.
+Notifications fall back to a JSONL log when env vars are missing. Locally that
+is `.data/notification-log.jsonl`; on Vercel it is temporary `/tmp` storage.
+That means a misconfigured deploy can look like the app is working when no one
+is being notified. Check `/api/health` and the dashboard warning before live
+traffic.
 
 Copy `.env.example` to `.env.local` and set:
 
@@ -63,7 +67,14 @@ If any of these are unset, that channel is skipped (logged, not sent).
 
 ## Local data
 
-The app seeds and writes `.data/pricing-agent.json` on first boot. To start clean, delete `.data/` and restart `pnpm dev`. To experiment without polluting the seed file, set `LOCAL_DATA_PATH=/tmp/whatever.json`.
+The app seeds and writes `.data/pricing-agent.json` on first boot locally. To
+start clean, delete `.data/` and restart `pnpm dev`. To experiment without
+polluting the seed file, set `LOCAL_DATA_PATH=/tmp/whatever.json`.
+
+For Vercel production, run `supabase/migrations/00001_initial.sql` in Supabase
+and set `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` in Vercel. Without
+those env vars the app will render on Vercel, but writes use temporary
+serverless storage and should not be trusted for live leads.
 
 Editable pricing assumptions live in `lib/pricing-config.ts` and service cost
 inputs live in `lib/server/seeds.ts` / `/dashboard/costs`.

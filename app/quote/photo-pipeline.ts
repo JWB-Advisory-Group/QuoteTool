@@ -1,8 +1,9 @@
 import type { PhotoAttachment } from "@/lib/types";
-
-export const MAX_RAW_PHOTO_BYTES = 25 * 1024 * 1024;
-export const MAX_COMPRESSED_BYTES = 1_800_000;
-export const PHOTO_MAX_EDGE = 1600;
+import {
+  MAX_COMPRESSED_PHOTO_BYTES,
+  MAX_RAW_PHOTO_BYTES,
+  PHOTO_MAX_EDGE,
+} from "@/lib/photo-limits";
 
 export type ClientPhoto = {
   id: string;
@@ -56,12 +57,12 @@ export async function readPhoto(file: File): Promise<PhotoReadResult> {
     return {
       kind: "error",
       name: file.name,
-      reason: `Larger than ${Math.round(MAX_RAW_PHOTO_BYTES / 1024 / 1024)} MB — please send a smaller photo.`,
+      reason: `Larger than ${Math.round(MAX_RAW_PHOTO_BYTES / 1024 / 1024)} MB - please send a smaller photo.`,
     };
   }
 
   try {
-    if (file.size <= 600_000) {
+    if (file.size <= MAX_COMPRESSED_PHOTO_BYTES) {
       const previewUrl = URL.createObjectURL(file);
       return {
         kind: "ok",
@@ -102,15 +103,19 @@ export async function readPhoto(file: File): Promise<PhotoReadResult> {
 
     let quality = 0.82;
     let compressed = await canvasToBlob(canvas, quality);
-    while (compressed && compressed.size > MAX_COMPRESSED_BYTES && quality > 0.4) {
+    while (
+      compressed &&
+      compressed.size > MAX_COMPRESSED_PHOTO_BYTES &&
+      quality > 0.35
+    ) {
       quality -= 0.1;
       compressed = await canvasToBlob(canvas, quality);
     }
-    if (!compressed || compressed.size > MAX_COMPRESSED_BYTES) {
+    if (!compressed || compressed.size > MAX_COMPRESSED_PHOTO_BYTES) {
       return {
         kind: "error",
         name: file.name,
-        reason: "Photo is too large even after compression — try a smaller crop.",
+        reason: "Photo is too large even after compression - try a smaller crop.",
       };
     }
 
