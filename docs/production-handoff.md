@@ -4,6 +4,9 @@
 
 The app runs locally with a file-backed store at `.data/pricing-agent.json`. That makes V1 usable immediately for testing. For production, move the same core tables to Supabase using `supabase/migrations/00001_initial.sql` and swap `lib/server/store.ts` for a Supabase-backed adapter.
 
+Local development seeds demo leads when the queue is empty. Set `DEMO_QUOTES=off`
+in any shared/staging environment where seeded leads would create confusion.
+
 ## Environment
 
 Copy `.env.example` to `.env.local`.
@@ -23,6 +26,7 @@ Copy `.env.example` to `.env.local`.
 ## Acceptance Checks
 
 - Submit 10 test quotes through `/quote`.
+- Submit at least one quote without photos, then upload 2-4 photos from `/quote/[id]#photos`.
 - Confirm no quote can be sent below `estimate.floorBandHigh`.
 - Confirm notification log or live SMS/email receives customer and Dante messages.
 - Log `WON 625`, `LOST`, and `NO RESPONSE` through dashboard or Twilio webhook.

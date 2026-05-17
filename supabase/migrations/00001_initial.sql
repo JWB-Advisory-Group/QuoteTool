@@ -45,7 +45,9 @@ create table quotes (
   customer_name text not null,
   customer_email text not null,
   customer_phone text,
+  preferred_contact_method text not null default 'text',
   source text not null,
+  property_type text not null default 'single_family',
   address_street text not null,
   address_city text not null,
   address_zip text not null,
@@ -60,6 +62,7 @@ create table quotes (
   photo_attachments jsonb not null default '[]'::jsonb,
   preferred_windows jsonb not null default '[]'::jsonb,
   notes text,
+  internal_notes text not null default '',
   status text not null default 'pending',
   estimate jsonb not null,
   final_quote_amount numeric,
@@ -69,6 +72,8 @@ create table quotes (
   outcome_check_date date,
   approval jsonb,
   photos_requested_at timestamptz,
+  expires_at timestamptz,
+  duplicate_context jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

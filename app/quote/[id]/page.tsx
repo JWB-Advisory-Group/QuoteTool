@@ -19,6 +19,7 @@ import {
   isQuoteExpired,
 } from "@/lib/server/store";
 import type { Quote, QuotePackageOption } from "@/lib/types";
+import { PhotoUploadPanel } from "./photo-upload-panel";
 import { PublicQuoteActions } from "./public-quote-actions";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,8 @@ export function PublicQuoteView({
       : `${formatMoney(quote.estimate.rangeLow)}-${formatMoney(
           quote.estimate.rangeHigh,
         )} estimate`;
+  const needsPhotoConfirmation =
+    !quote.finalQuoteAmount && !surveyRequired && quote.photoAttachments.length === 0;
 
   return (
     <main className="min-h-screen bg-[#f7f6f2] px-4 py-5 text-[#1d211c] sm:px-6 lg:px-8">
@@ -138,6 +141,17 @@ export function PublicQuoteView({
                   This is a budgetary range. {businessProfile.ownerName} will do a
                   quick scope review before confirming the final price — painting
                   and permanent lighting always need a brief on-site walk.
+                </div>
+              ) : null}
+              {needsPhotoConfirmation ? (
+                <div className="mt-5 rounded-md border border-[#f1d18a] bg-[#fff8e5] px-3 py-3 text-sm font-medium leading-6 text-[#7a5400]">
+                  This is an estimated quote. Photos are optional, but 2-4 clear
+                  shots usually let {businessProfile.ownerName} turn it into an
+                  actual quote without a site visit.{" "}
+                  <a href="#photos" className="underline underline-offset-2">
+                    Upload photos
+                  </a>
+                  , or skip them and he will follow up.
                 </div>
               ) : null}
               {expired ? (
@@ -278,6 +292,15 @@ export function PublicQuoteView({
           </div>
 
           <aside id="choose-package" className="space-y-5">
+            <div id="photos">
+              <PhotoUploadPanel
+                quoteId={quote.id}
+                existingPhotoCount={quote.photoAttachments.length}
+                requiredPhotos={quote.estimate.intakeRequirements.requiredPhotos}
+                estimateConfidence={quote.estimate.estimateConfidence}
+                surveyRequired={surveyRequired}
+              />
+            </div>
             <PublicQuoteActions
               quoteId={quote.id}
               packageOptions={packageOptions}

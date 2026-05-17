@@ -20,11 +20,13 @@ import type {
   PreferredWindow,
   PricingInput,
   Quote,
+  QuoteStatus,
   QuoteRiskProfile,
   SendReviewRecord,
   Service,
 } from "@/lib/types";
 import { seedStore } from "@/lib/server/seeds";
+import { buildDemoLeads, shouldSeedDemoLeads } from "@/lib/server/demo-leads";
 
 const QUOTE_EXPIRY_DAYS = 7;
 const DUPLICATE_LOOKBACK_DAYS = 30;
@@ -69,7 +71,11 @@ async function withStoreLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function cloneSeed(): AppStore {
-  return JSON.parse(JSON.stringify(seedStore)) as AppStore;
+  const store = JSON.parse(JSON.stringify(seedStore)) as AppStore;
+  if (store.quotes.length === 0 && shouldSeedDemoLeads()) {
+    store.quotes = buildDemoLeads(store);
+  }
+  return store;
 }
 
 function normalizeCostInput(input: CostInput): CostInput {
@@ -293,6 +299,10 @@ function normalizeStore(store: AppStore): AppStore {
       street: quote.addressStreet,
       city: quote.addressCity,
       source: quote.source,
+      customerPhone: quote.customerPhone,
+      customerEmail: quote.customerEmail,
+      propertyType: quote.propertyType ?? "single_family",
+      jobDetails: quote.notes,
       serviceLines,
       riskProfile: quote.riskProfile ?? defaultRiskProfile(),
       serviceDetails: normalizeServiceDetails(quote.serviceDetails),
@@ -301,11 +311,14 @@ function normalizeStore(store: AppStore): AppStore {
     const createdAt = quote.createdAt ?? new Date().toISOString();
     return {
       ...quote,
+      propertyType: quote.propertyType ?? "single_family",
+      preferredContactMethod: quote.preferredContactMethod ?? "text",
       serviceLines,
       riskProfile: quote.riskProfile ?? defaultRiskProfile(),
       serviceDetails: normalizeServiceDetails(quote.serviceDetails),
       photoAttachments: quote.photoAttachments ?? [],
       preferredWindows: quote.preferredWindows ?? [],
+      internalNotes: quote.internalNotes ?? "",
       approval: quote.approval
         ? {
             ...quote.approval,
@@ -333,7 +346,12 @@ export async function loadStore(): Promise<AppStore> {
   await ensureDataDir();
   try {
     const raw = await readFile(storePath, "utf8");
-    return normalizeStore(JSON.parse(raw) as AppStore);
+    const store = normalizeStore(JSON.parse(raw) as AppStore);
+    if (store.quotes.length === 0 && shouldSeedDemoLeads()) {
+      store.quotes = buildDemoLeads(store);
+      await saveStore(store);
+    }
+    return store;
   } catch {
     const seeded = cloneSeed();
     await saveStore(seeded);
@@ -389,6 +407,7 @@ export async function createQuote(
     | "photosRequestedAt"
     | "expiresAt"
     | "duplicateContext"
+    | "internalNotes"
     | "createdAt"
     | "updatedAt"
   >,
@@ -426,6 +445,10 @@ export async function createQuote(
     serviceDetails: sanitized.serviceDetails,
     riskProfile: sanitized.riskProfile,
     photoAttachments: sanitized.photoAttachments,
+    customerPhone: sanitized.customerPhone,
+    customerEmail: sanitized.customerEmail,
+    propertyType: sanitized.propertyType,
+    jobDetails: sanitized.notes,
   });
 
   const quote: Quote = {
@@ -443,6 +466,7 @@ export async function createQuote(
     photosRequestedAt: null,
     expiresAt: defaultQuoteExpiry(now),
     duplicateContext,
+    internalNotes: "",
     createdAt: now,
     updatedAt: now,
   };
@@ -678,6 +702,82 @@ export async function markPhotosRequested(id: string) {
   });
 }
 
+export async function addQuotePhotos(
+  id: string,
+  attachments: Quote["photoAttachments"],
+) {
+  return withStoreLock(async () => {
+    const store = await loadStore();
+    const quote = store.quotes.find((item) => item.id === id);
+    if (!quote) return null;
+
+    const existingIds = new Set(quote.photoAttachments.map((photo) => photo.id));
+    const nextPhotos = [
+      ...quote.photoAttachments,
+      ...attachments.filter((photo) => !existingIds.has(photo.id)),
+    ].slice(0, 6);
+
+    quote.photoAttachments = nextPhotos;
+    quote.estimate = calculateEstimate(store, {
+      serviceSlug: quote.serviceSlug,
+      jobSize: quote.jobSize,
+      jobSizeLabel: quote.jobSizeLabel,
+      stories: quote.stories,
+      urgency: quote.urgency,
+      zip: quote.addressZip,
+      street: quote.addressStreet,
+      city: quote.addressCity,
+      source: quote.source,
+      customerPhone: quote.customerPhone,
+      customerEmail: quote.customerEmail,
+      propertyType: quote.propertyType,
+      jobDetails: quote.notes,
+      serviceLines: quote.serviceLines,
+      serviceDetails: quote.serviceDetails,
+      riskProfile: quote.riskProfile,
+      photoAttachments: nextPhotos,
+    });
+    quote.updatedAt = new Date().toISOString();
+    await saveStore(store);
+    return quote;
+  });
+}
+
+export async function updateQuoteStatus(id: string, status: QuoteStatus) {
+  return withStoreLock(async () => {
+    const store = await loadStore();
+    const quote = store.quotes.find((item) => item.id === id);
+    if (!quote) return null;
+
+    const now = new Date().toISOString();
+    quote.status = status;
+    if (
+      status === "contacted" &&
+      !quote.sentAt &&
+      !quote.followUps.some((item) => item.taskId === "manual_contact")
+    ) {
+      quote.followUps.push({
+        id: crypto.randomUUID(),
+        taskId: "manual_contact",
+        label: "Manual contact",
+        channel: quote.preferredContactMethod === "email" ? "email" : "sms",
+        message: "Owner marked the lead as contacted.",
+        sentAt: now,
+        sentBy: "dashboard",
+      });
+    }
+    if (status === "sent") {
+      quote.finalQuoteAmount = quote.finalQuoteAmount ?? quote.estimate.recommendedAsk;
+      quote.sentAt = quote.sentAt ?? now;
+      quote.outcomeCheckDate = quote.outcomeCheckDate ?? outcomeDateForUrgency(quote.urgency);
+      quote.expiresAt = quote.expiresAt ?? defaultQuoteExpiry(now);
+    }
+    quote.updatedAt = now;
+    await saveStore(store);
+    return quote;
+  });
+}
+
 export async function recordFollowUp(
   id: string,
   input: {
@@ -831,7 +931,7 @@ export async function getDueCustomerFollowUps() {
   const store = await loadStore();
   return store.quotes
     .filter((quote) =>
-      ["pending", "sent", "awaiting_deposit", "approved", "scheduled"].includes(
+      ["pending", "contacted", "sent", "awaiting_deposit", "approved", "scheduled"].includes(
         quote.status,
       ),
     )
@@ -878,6 +978,7 @@ export function getSourceRoi(
       bucket.lostCount += 1;
     } else if (
       quote.status === "pending" ||
+      quote.status === "contacted" ||
       quote.status === "sent" ||
       quote.status === "approved" ||
       quote.status === "awaiting_deposit" ||

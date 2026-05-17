@@ -1,7 +1,7 @@
 import type { PhotoAttachment } from "@/lib/types";
 
 export const MAX_RAW_PHOTO_BYTES = 25 * 1024 * 1024;
-export const MAX_COMPRESSED_BYTES = 2_400_000;
+export const MAX_COMPRESSED_BYTES = 1_800_000;
 export const PHOTO_MAX_EDGE = 1600;
 
 export type ClientPhoto = {

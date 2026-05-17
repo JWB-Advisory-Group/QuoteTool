@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { formatMoney } from "@/lib/format";
 import { businessProfile, getPublicAppUrl } from "@/lib/business";
+import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
 
 const logPath = path.join(process.cwd(), ".data", "notification-log.jsonl");
 
@@ -145,6 +146,8 @@ export async function notifyDanteOfQuote(quote: Quote) {
     <p><strong>${quote.customerName}</strong> requested ${serviceSummary(quote)} at ${quoteAddress(quote)}.</p>
     <p>Lead: ${quote.estimate.leadQuality} (${quote.estimate.closeProbability}% close)<br />
     Photos: ${quote.photoAttachments.length}<br />
+    Property: ${propertyTypeLabels[quote.propertyType] ?? quote.propertyType}<br />
+    Preferred contact: ${preferredContactLabels[quote.preferredContactMethod] ?? quote.preferredContactMethod}<br />
     Route: ${quote.estimate.routeZone}<br />
     Crew: ${quote.estimate.crewBlock}</p>
     <p>Protected floor: ${formatMoney(quote.estimate.floorBandHigh)}<br />
@@ -157,9 +160,37 @@ export async function notifyDanteOfQuote(quote: Quote) {
     toPhone
       ? sendSms(
           toPhone,
-          `New ${quote.estimate.leadQuality} lead from ${quote.customerName}: ${serviceSummary(quote)}, ${quote.photoAttachments.length} photos, ${formatMoney(quote.estimate.rangeLow)}-${formatMoney(quote.estimate.rangeHigh)}. ${dashboardUrl}`,
+          `New ${quote.estimate.leadQuality} lead from ${quote.customerName}: ${serviceSummary(quote)}, ${quote.photoAttachments.length} photos, prefers ${preferredContactLabels[quote.preferredContactMethod] ?? quote.preferredContactMethod}, ${formatMoney(quote.estimate.rangeLow)}-${formatMoney(quote.estimate.rangeHigh)}. ${dashboardUrl}`,
         )
       : logNotification({ channel: "sms", skipped: true, reason: "missing_DANTE_PHONE", subject }),
+  ]);
+}
+
+export async function notifyDanteOfPhotoUpload(
+  quote: Quote,
+  uploadedCount: number,
+) {
+  const toEmail = process.env.DANTE_EMAIL;
+  const toPhone = process.env.DANTE_PHONE;
+  const dashboardUrl = `${getPublicAppUrl()}/dashboard/quotes/${quote.id}`;
+  const subject = `${uploadedCount} photo${uploadedCount === 1 ? "" : "s"} uploaded: ${quote.customerName}`;
+  const html = `
+    <h1>Photos uploaded for ${quote.customerName}</h1>
+    <p><strong>${serviceSummary(quote)}</strong> at ${quoteAddress(quote)}</p>
+    <p>Total photos now attached: ${quote.photoAttachments.length}<br />
+    Confidence: ${quote.estimate.estimateConfidence}<br />
+    Suggested ask: ${formatMoney(quote.estimate.recommendedAsk)}</p>
+    <p><a href="${dashboardUrl}">Review the lead</a></p>
+  `;
+  const sms = `${quote.customerName} uploaded ${uploadedCount} photo${uploadedCount === 1 ? "" : "s"} for ${serviceSummary(quote)}. Confidence now ${quote.estimate.estimateConfidence}. ${dashboardUrl}`;
+
+  await Promise.allSettled([
+    toEmail
+      ? sendEmail(toEmail, subject, html)
+      : logNotification({ channel: "email", skipped: true, reason: "missing_DANTE_EMAIL", subject }),
+    toPhone
+      ? sendSms(toPhone, sms)
+      : logNotification({ channel: "sms", skipped: true, reason: "missing_DANTE_PHONE", body: sms }),
   ]);
 }
 
@@ -168,13 +199,21 @@ export async function notifyCustomerReceived(quote: Quote) {
   const services = serviceSummary(quote);
   const headline = `Hi ${quote.customerName}, this is ${businessProfile.ownerName} at ${businessProfile.name}.`;
   const range = `${formatMoney(quote.estimate.rangeLow)}-${formatMoney(quote.estimate.rangeHigh)}`;
-  const message = `${headline} Got your ${services} request — instant range is ${range}. I'll confirm the firm price within an hour: ${reviewUrl}  Reply STOP to opt out.`;
+  const photoNudge =
+    quote.photoAttachments.length === 0
+      ? ` Photos are optional: upload 2-4 for an actual quote, or skip and I will follow up on the estimate: ${reviewUrl}`
+      : ` Thanks for sending photos. I will confirm the actual quote from here: ${reviewUrl}`;
+  const message = `${headline} Got your ${services} request. Estimated range is ${range}.${photoNudge} Reply STOP to opt out.`;
+  const emailPhotoLine =
+    quote.photoAttachments.length === 0
+      ? `<p>Photos are optional. Upload 2-4 clear shots if you want Dante to turn this estimated quote into an actual quote faster. If you skip them, he can still follow up with the estimate or a quick visit.</p>`
+      : `<p>Thanks for sending photos. Dante can use them to confirm the actual quote and next booking window.</p>`;
 
   await Promise.all([
     sendEmail(
       quote.customerEmail,
       `Your ${businessProfile.name} quote: ${range}`,
-      `<p>${headline}</p><p>Got your <strong>${services}</strong> request. Instant range is <strong>${range}</strong>.</p><p><a href="${reviewUrl}">Review your packages and scope here</a> — I'll confirm the firm price within an hour.</p>`,
+      `<p>${headline}</p><p>Got your <strong>${services}</strong> request. Estimated range is <strong>${range}</strong>.</p>${emailPhotoLine}<p><a href="${reviewUrl}">Review your packages, scope, and optional photo upload here</a>.</p>`,
     ),
     quote.customerPhone ? sendSms(quote.customerPhone, message) : Promise.resolve(),
   ]);
@@ -240,16 +279,16 @@ export async function notifyCustomerPhotoRequest(
   quote: Quote,
   channel: "sms" | "email" | "both",
 ) {
-  const link = `${getPublicAppUrl()}/quote?resume=${quote.id}`;
+  const link = `${getPublicAppUrl()}/quote/${quote.id}#photos`;
   const body = `Hi ${quote.customerName}, this is ${businessProfile.name}. To lock in your final price for ${serviceSummary(
     quote,
-  )}, please reply with 2-4 photos (front, sides, problem areas). Or upload here: ${link}`;
+  )}, photos are optional but they help us move from an estimate to an actual quote. Upload 2-4 photos here: ${link}`;
   const tasks: Promise<unknown>[] = [];
   if (channel === "email" || channel === "both") {
     tasks.push(
       sendEmail(
         quote.customerEmail,
-        "Quick photos needed to finalize your 631 Solutions quote",
+        "Optional photos for your actual 631 Solutions quote",
         `<p>${body}</p>`,
       ),
     );

@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 import type {
   AccessConcern,
+  PreferredContactMethod,
   PreferredWindow,
+  PropertyType,
   QuoteRiskProfile,
   QuoteServiceDetails,
   QuoteServiceLine,
@@ -25,6 +27,7 @@ import type {
   WindowDetail,
 } from "@/lib/types";
 import { urgencyOptions } from "@/lib/pricing";
+import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
 import {
   type ClientPhoto,
   type PhotoReadResult,
@@ -53,7 +56,9 @@ type FormState = {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  preferredContactMethod: PreferredContactMethod;
   source: string;
+  propertyType: PropertyType;
   notes: string;
   serviceDetails: QuoteServiceDetails;
   riskProfile: QuoteRiskProfile;
@@ -148,7 +153,9 @@ export function QuoteForm({ services }: { services: Service[] }) {
     customerName: "",
     customerEmail: "",
     customerPhone: "",
+    preferredContactMethod: "text",
     source: "",
+    propertyType: "single_family",
     notes: "",
     serviceDetails: {
       roofMossSeverity: "not_sure",
@@ -400,6 +407,12 @@ export function QuoteForm({ services }: { services: Service[] }) {
       if (form.customerEmail && !EMAIL_RE.test(form.customerEmail.trim())) {
         errs.customerEmail = "Email format looks off.";
       }
+      if (
+        form.preferredContactMethod === "email" &&
+        !EMAIL_RE.test(form.customerEmail.trim())
+      ) {
+        errs.customerEmail = "Email is required if you prefer email.";
+      }
     }
     return errs;
   }
@@ -612,8 +625,9 @@ export function QuoteForm({ services }: { services: Service[] }) {
                 Where and when?
               </h2>
               <p className="mt-2 text-sm leading-6 text-[#62685f]">
-                Address and a couple of photos let us hold a tighter price. Most
-                homeowners are done in under a minute.
+                Address gives you an estimated quote. Add 2-4 photos if you
+                want Dante to turn it into an actual quote faster. Skipping
+                photos is fine.
               </p>
             </div>
 
@@ -701,6 +715,23 @@ export function QuoteForm({ services }: { services: Service[] }) {
             </div>
 
             <label className="block text-sm font-semibold">
+              Property type
+              <select
+                value={form.propertyType}
+                onChange={(event) =>
+                  update("propertyType", event.target.value as PropertyType)
+                }
+                className="mt-2 h-12 w-full rounded-md border border-[#cbc7bb] bg-white px-3 text-base outline-none ring-[#1d211c]/20 focus:ring-4"
+              >
+                {Object.entries(propertyTypeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm font-semibold">
               When would you want this done?
               <select
                 value={form.urgency}
@@ -720,11 +751,12 @@ export function QuoteForm({ services }: { services: Service[] }) {
                 <div>
                   <div className="flex items-center gap-2 text-sm font-semibold">
                     <Camera size={16} />
-                    Photos (optional, but tighten the price)
+                    Photos (optional - actual quote faster)
                   </div>
                   <p className="mt-1 text-xs leading-5 text-[#62685f]">
-                    Add the shots below for the tightest number. Skip if you
-                    would rather have Dante swing by for a quick look.
+                    Upload the shots below if you want an actual quote sooner.
+                    Skip this if you prefer an estimated quote and quick
+                    follow-up.
                   </p>
                 </div>
                 <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-[#1d211c] px-4 text-sm font-semibold text-white transition hover:bg-[#30372e]">
@@ -1150,6 +1182,25 @@ export function QuoteForm({ services }: { services: Service[] }) {
                 </p>
               ) : null}
             </div>
+            <label className="block text-sm font-semibold">
+              Best way to reach you
+              <select
+                value={form.preferredContactMethod}
+                onChange={(event) =>
+                  update(
+                    "preferredContactMethod",
+                    event.target.value as PreferredContactMethod,
+                  )
+                }
+                className="mt-2 h-12 w-full rounded-md border border-[#cbc7bb] bg-white px-3 text-base outline-none ring-[#1d211c]/20 focus:ring-4"
+              >
+                {Object.entries(preferredContactLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div>
               <label htmlFor={fieldId("email")} className="block text-sm font-semibold">
                 Email{" "}
@@ -1179,6 +1230,20 @@ export function QuoteForm({ services }: { services: Service[] }) {
                 </p>
               ) : null}
             </div>
+            <label className="block text-sm font-semibold" htmlFor={fieldId("notes")}>
+              Job notes{" "}
+              <span className="font-normal text-[#62685f]">
+                (anything Dante should know)
+              </span>
+              <textarea
+                id={fieldId("notes")}
+                name="notes"
+                value={form.notes}
+                onChange={(event) => update("notes", event.target.value)}
+                className="mt-2 min-h-24 w-full rounded-md border border-[#cbc7bb] bg-white px-3 py-2 text-base outline-none ring-[#1d211c]/20 focus:ring-4"
+                placeholder="Heavy green side, locked gate, wants windows too, flexible after next week..."
+              />
+            </label>
           </div>
         ) : null}
 

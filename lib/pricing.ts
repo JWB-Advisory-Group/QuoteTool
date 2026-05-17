@@ -1,5 +1,15 @@
 import { roundToFive } from "@/lib/format";
 import { validateAddress } from "@/lib/address-validation";
+import {
+  defaultDriveReserveMinutes,
+  defaultServiceMinimums,
+  photoRequirementsByService,
+  serviceLeadValueWeights,
+  serviceScopes,
+  serviceUnitCount,
+  urgencyAdjustments,
+  urgencyOptions,
+} from "@/lib/pricing-config";
 import type {
   AddressValidation,
   AppStore,
@@ -17,100 +27,10 @@ import type {
   ScheduleWindowOption,
   QuoteServiceDetails,
   QuoteServiceLine,
-  Service,
   ServiceEstimateBreakdown,
 } from "@/lib/types";
 
-const urgencyAdjustments: Record<string, number> = {
-  asap: 1.16,
-  this_week: 1.08,
-  this_month: 1,
-  flexible: 0.97,
-};
-
-const defaultDriveReserveMinutes: Record<string, number> = {
-  "house-wash": 30,
-  "window-cleaning": 30,
-  "roof-wash": 40,
-  gutters: 30,
-  "patio-wash": 30,
-  "fence-wash": 35,
-  "paver-refresh": 40,
-  "solar-panels": 30,
-  "permanent-lighting": 45,
-  painting: 45,
-};
-
-const defaultServiceMinimums: Record<string, number> = {
-  "house-wash": 350,
-  "window-cleaning": 225,
-  "roof-wash": 650,
-  gutters: 225,
-  "patio-wash": 225,
-  "fence-wash": 275,
-  "paver-refresh": 500,
-  "solar-panels": 225,
-  "permanent-lighting": 900,
-  painting: 750,
-};
-
-const serviceScopes: Record<string, { include: string[]; exclude: string[] }> = {
-  "house-wash": {
-    include: [
-      "Soft wash of exterior siding, trim, soffits, and accessible exterior surfaces",
-      "Standard algae and organic growth treatment",
-    ],
-    exclude: [
-      "Oxidation removal, paint correction, detached structures, and interior windows",
-      "Moving heavy furniture or clearing locked access points",
-    ],
-  },
-  "window-cleaning": {
-    include: ["Exterior glass cleaning for selected window count"],
-    exclude: [
-      "Storm windows, hard water removal, tracks, and screens unless added to scope",
-    ],
-  },
-  "roof-wash": {
-    include: ["Soft wash roof treatment with plant and runoff protection planning"],
-    exclude: ["Roof repairs, roof walking guarantees, and gutter repairs"],
-  },
-  gutters: {
-    include: ["Gutter cleanout for selected linear footage"],
-    exclude: ["Gutter repairs, underground drain clearing, and guard removal unless noted"],
-  },
-  "patio-wash": {
-    include: ["Surface wash for selected patio or walkway square footage"],
-    exclude: ["Sealing, sanding, rust/oil treatment, and furniture moving unless noted"],
-  },
-  "fence-wash": {
-    include: ["Fence wash for selected linear footage and normal organic buildup"],
-    exclude: ["Stain removal, old paint risk, repairs, and both sides unless noted"],
-  },
-  "paver-refresh": {
-    include: ["Paver surface cleaning and restoration review for selected square footage"],
-    exclude: ["Polymeric sand, sealing, failed sealer removal, and weed remediation unless quoted"],
-  },
-  "solar-panels": {
-    include: ["Solar panel rinse/cleaning for selected panel count"],
-    exclude: ["Electrical diagnostics, roof repairs, and unsafe roof access"],
-  },
-  "permanent-lighting": {
-    include: ["Permanent lighting lead intake and budgetary install range"],
-    exclude: ["Electrical upgrades, custom controls, and final install survey"],
-  },
-  painting: {
-    include: ["Painting lead intake and budgetary project range"],
-    exclude: ["Repairs, lead paint remediation, and final paint/material selection"],
-  },
-};
-
-export const urgencyOptions = [
-  { value: "asap", label: "ASAP" },
-  { value: "this_week", label: "This week" },
-  { value: "this_month", label: "This month" },
-  { value: "flexible", label: "Flexible" },
-];
+export { urgencyOptions };
 
 export const sourceOptions = [
   "Truck QR",
@@ -128,15 +48,6 @@ export function getService(store: AppStore, slug: string) {
 
 export function getCostInput(store: AppStore, serviceSlug: string) {
   return store.costInputs.find((input) => input.serviceSlug === serviceSlug);
-}
-
-function unitsFor(service: Service, jobSize: number) {
-  if (service.unit === "per_1000_sqft") return jobSize / 1000;
-  if (service.unit === "per_100_sqft") return jobSize / 100;
-  if (service.unit === "per_100_linear_ft") return jobSize / 100;
-  if (service.unit === "per_window") return jobSize;
-  if (service.unit === "per_panel") return jobSize;
-  return 1;
 }
 
 function getStoryMultiplier(stories: number) {
@@ -736,19 +647,6 @@ function bundleRecommendationsFor(
   return recommendations.slice(0, 4);
 }
 
-const photoRequirementsByService: Record<string, string[]> = {
-  "house-wash": ["Front of home", "Left and right sides", "Worst green/dirty area"],
-  "window-cleaning": ["Front windows", "Screens/storm windows if present", "Any high or hard-water glass"],
-  "roof-wash": ["Roof from front", "Roof from back/side", "Heavy moss or black streaks", "Landscaping under roofline"],
-  gutters: ["Front gutter line", "Highest gutter section", "Any guards or downspout issue"],
-  "patio-wash": ["Full patio/walkway", "Furniture or obstacles", "Worst stains"],
-  "fence-wash": ["Full fence run", "Close-up of buildup", "Both sides if requested"],
-  "paver-refresh": ["Full paver area", "Close-up of joints", "Sealer/weeds/stains"],
-  "solar-panels": ["Panel layout", "Roof access angle"],
-  "permanent-lighting": ["Front roofline", "Corners/returns", "Power/control location"],
-  painting: ["Each side/room", "Damaged surfaces", "Paint failure or repairs"],
-};
-
 function intakeRequirementsFor(
   lines: QuoteServiceLine[],
   riskProfile: QuoteRiskProfile,
@@ -836,8 +734,8 @@ function followUpPlanFor(
         dueDate: addDays(0),
         channel: "sms",
         priority: "now",
-        message: "Could you send 2-4 photos of the front, sides, and worst areas? That lets us firm up the quote without wasting your time on a site visit.",
-        ownerNote: "Do this before guessing a final price.",
+        message: "Photos are optional, but 2-4 clear shots of the front, sides, and worst areas usually let us move from an estimate to an actual quote without a site visit.",
+        ownerNote: "Offer photos as optional, but use them before promising a final price.",
       },
       {
         id: "photo_request_next_morning",
@@ -845,7 +743,7 @@ function followUpPlanFor(
         dueDate: addBusinessDays(1),
         channel: strongLead ? "call" : "sms",
         priority: "today",
-        message: "Quick follow-up on the photos so we can lock in your package and schedule window.",
+        message: "Quick follow-up on the optional photos. With them we can usually lock the actual quote and schedule window; without them we can still keep it as an estimate.",
         ownerNote: "Call good leads; text lower-quality leads.",
       },
     ];
@@ -880,6 +778,82 @@ function followUpPlanFor(
       ownerNote: "Either recover the job or mark lost/no-response.",
     },
   ];
+}
+
+function serviceValueBoost(lines: QuoteServiceLine[]) {
+  return Math.min(
+    16,
+    lines.reduce(
+      (sum, line) => sum + (serviceLeadValueWeights[line.serviceSlug] ?? 0),
+      0,
+    ),
+  );
+}
+
+function contactCompletenessBoost(input: PricingInput) {
+  let boost = 0;
+  if (input.customerPhone?.replace(/\D/g, "").length) boost += 5;
+  if (input.customerEmail?.trim()) boost += 4;
+  if (input.propertyType) boost += 2;
+  if ((input.jobDetails ?? "").trim().length >= 24) boost += 4;
+  return boost;
+}
+
+function timelineBoost(urgency: string, photoCount: number) {
+  if (urgency === "asap") return photoCount > 0 ? 8 : 3;
+  if (urgency === "this_week") return 6;
+  if (urgency === "this_month") return 2;
+  return 0;
+}
+
+function estimateConfidenceFor(
+  measurementConfidence: PricingEstimate["estimateConfidence"],
+  manualReviewReasons: string[],
+): PricingEstimate["estimateConfidence"] {
+  if (manualReviewReasons.length >= 5) return "low";
+  if (measurementConfidence === "low") return "low";
+  if (manualReviewReasons.length > 0 || measurementConfidence === "medium") {
+    return "medium";
+  }
+  return "high";
+}
+
+function pricingNotesFor(input: {
+  rangeLow: number;
+  rangeHigh: number;
+  routeZone: string;
+  storyMultiplier: number;
+  riskMultiplier: number;
+  urgency: string;
+  photoCount: number;
+  serviceLines: QuoteServiceLine[];
+  manualReviewReasons: string[];
+}) {
+  const notes = [
+    "Preliminary range only. Final quote depends on access, condition, measurements, and photos.",
+    `Route assumption: ${input.routeZone}.`,
+  ];
+
+  if (input.serviceLines.length > 1) {
+    notes.push("Bundle pricing assumes one trip and shared setup time.");
+  }
+  if (input.storyMultiplier > 1) {
+    notes.push(`${input.storyMultiplier}x height/story adjustment applied.`);
+  }
+  if (input.riskMultiplier > 1.05) {
+    notes.push(`${input.riskMultiplier.toFixed(2)}x condition/access risk adjustment applied.`);
+  }
+  if (input.urgency === "asap" || input.urgency === "this_week") {
+    notes.push("Sooner timeline protects schedule capacity instead of discounting the job.");
+  }
+  if (input.photoCount === 0) {
+    notes.push("No photos yet, so Dante should keep this as a range until the customer sends photos.");
+  }
+  if (input.manualReviewReasons.length > 0) {
+    notes.push(`Manual review: ${input.manualReviewReasons.slice(0, 2).join(" ")}`);
+  }
+
+  return notes.slice(0, 6);
 }
 
 function buildScope(
@@ -1160,7 +1134,7 @@ export function calculateEstimate(
       allRiskReasons.add(`${lineService.name} needs a survey before it can be booked as a final price.`);
     }
 
-    const lineUnitCount = unitsFor(lineService, line.jobSize);
+    const lineUnitCount = serviceUnitCount(lineService, line.jobSize);
     const buffer = lineCost.bufferActive ? 1.15 : 1;
     const lineHours =
       lineCost.hoursPerUnit *
@@ -1282,12 +1256,53 @@ export function calculateEstimate(
   const routePenalty = route.manualReason ? 18 : route.zone.includes("Nassau") ? 6 : 0;
   const sourceBoost =
     input.source === "Repeat customer" || input.source === "Referral" ? 8 : 0;
+  const valueBoost = Math.min(
+    12,
+    recommendedAsk >= 1800
+      ? 12
+      : recommendedAsk >= 1000
+        ? 8
+        : recommendedAsk >= 650
+          ? 5
+          : 0,
+  );
+  const jobSizeBoost = hours >= 8 ? 6 : hours >= 4 ? 4 : 0;
+  const completenessBoost = contactCompletenessBoost(input);
+  const priorityBoost =
+    serviceValueBoost(serviceLines) +
+    valueBoost +
+    jobSizeBoost +
+    timelineBoost(input.urgency, photoAttachments.length);
   const leadScore = Math.max(
     20,
-    Math.min(96, 78 + sourceBoost - photoPenalty - riskPenalty - routePenalty),
+    Math.min(
+      96,
+      58 +
+        sourceBoost +
+        completenessBoost +
+        priorityBoost -
+        photoPenalty -
+        riskPenalty -
+        routePenalty,
+    ),
   );
   const leadQuality =
     leadScore >= 72 ? "good" : leadScore >= 50 ? "caution" : "bad";
+  const estimateConfidence = estimateConfidenceFor(
+    intakeRequirements.measurementConfidence,
+    manualReviewReasons,
+  );
+  const pricingNotes = pricingNotesFor({
+    rangeLow,
+    rangeHigh,
+    routeZone: route.zone,
+    storyMultiplier,
+    riskMultiplier: maxRiskMultiplier,
+    urgency: input.urgency,
+    photoCount: photoAttachments.length,
+    serviceLines,
+    manualReviewReasons,
+  });
   const closeProbability = Math.max(
     15,
     Math.min(88, leadScore - (rangeLow > 1200 ? 8 : 0) + (sourceBoost ? 4 : 0)),
@@ -1350,6 +1365,8 @@ export function calculateEstimate(
     scheduleWindows,
     leadQuality,
     leadScore,
+    estimateConfidence,
+    pricingNotes,
     closeProbability,
     followUpStage: photoAttachments.length === 0 ? "Needs photos" : "Ready to quote",
     nextFollowUpDate: followUpPlan[0]?.dueDate ?? addDays(input.urgency === "asap" ? 1 : 2),

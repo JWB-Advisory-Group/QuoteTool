@@ -9,6 +9,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   process.env = { ...originalEnv };
 });
 
@@ -31,14 +32,14 @@ function makeRequest(opts: { cookie?: string; auth?: string } = {}): NextRequest
 describe("requireOwnerApi", () => {
   test("dev mode (no PIN) — allows anonymous", async () => {
     delete process.env.DASHBOARD_PIN;
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const { requireOwnerApi } = await import("@/lib/server/auth");
     expect(requireOwnerApi(makeRequest())).toBeNull();
   });
 
   test("production mode (no PIN) — refuses with 503", async () => {
     delete process.env.DASHBOARD_PIN;
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     const { requireOwnerApi } = await import("@/lib/server/auth");
     const res = requireOwnerApi(makeRequest());
     expect(res).not.toBeNull();
@@ -47,7 +48,7 @@ describe("requireOwnerApi", () => {
 
   test("PIN set, no cookie — returns 401", async () => {
     process.env.DASHBOARD_PIN = "1234";
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const { requireOwnerApi } = await import("@/lib/server/auth");
     const res = requireOwnerApi(makeRequest());
     expect(res!.status).toBe(401);
@@ -55,7 +56,7 @@ describe("requireOwnerApi", () => {
 
   test("PIN set, wrong cookie — returns 401", async () => {
     process.env.DASHBOARD_PIN = "1234";
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const { requireOwnerApi } = await import("@/lib/server/auth");
     const res = requireOwnerApi(makeRequest({ cookie: "wrong-session-value" }));
     expect(res!.status).toBe(401);
@@ -63,7 +64,7 @@ describe("requireOwnerApi", () => {
 
   test("PIN set, correct cookie — passes", async () => {
     process.env.DASHBOARD_PIN = "1234";
-    process.env.NODE_ENV = "development";
+    vi.stubEnv("NODE_ENV", "development");
     const { requireOwnerApi } = await import("@/lib/server/auth");
     // Re-implement the cookie hash to construct a valid one
     const { createHash } = await import("node:crypto");

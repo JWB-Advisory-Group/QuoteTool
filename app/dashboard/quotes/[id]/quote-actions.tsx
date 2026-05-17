@@ -41,6 +41,7 @@ export function QuoteActions({ quote }: { quote: Quote }) {
   const belowFloor = amount < quote.estimate.floorBandHigh;
   const reviewReasons = reviewReasonsFor(quote, amount);
   const needsSendReview = reviewReasons.length > 0;
+  const quoteNotSent = quote.status === "pending" || quote.status === "contacted";
   const canSend =
     !loading &&
     !belowFloor &&
@@ -242,7 +243,7 @@ export function QuoteActions({ quote }: { quote: Quote }) {
                   });
                   setStep("actuals");
                 }}
-                disabled={loading || quote.status === "pending"}
+                disabled={loading || quoteNotSent}
                 className="inline-flex h-14 items-center justify-center gap-2 rounded-md bg-[#d8f269] px-4 text-base font-semibold text-[#1d211c] transition hover:bg-[#cbe65c] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ThumbsUp size={18} />
@@ -251,7 +252,7 @@ export function QuoteActions({ quote }: { quote: Quote }) {
               <button
                 type="button"
                 onClick={() => submitOutcome("lost", false)}
-                disabled={loading || quote.status === "pending"}
+                disabled={loading || quoteNotSent}
                 className="inline-flex h-14 items-center justify-center gap-2 rounded-md border border-[#cbc7bb] px-4 text-base font-semibold transition hover:border-[#1d211c] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ThumbsDown size={18} />
@@ -260,7 +261,7 @@ export function QuoteActions({ quote }: { quote: Quote }) {
               <button
                 type="button"
                 onClick={() => submitOutcome("no_response", false)}
-                disabled={loading || quote.status === "pending"}
+                disabled={loading || quoteNotSent}
                 className="h-14 rounded-md border border-[#cbc7bb] px-4 text-base font-semibold transition hover:border-[#1d211c] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 No response
@@ -268,13 +269,13 @@ export function QuoteActions({ quote }: { quote: Quote }) {
               <button
                 type="button"
                 onClick={() => submitOutcome("later", false)}
-                disabled={loading || quote.status === "pending"}
+                disabled={loading || quoteNotSent}
                 className="h-14 rounded-md border border-[#cbc7bb] px-4 text-base font-semibold transition hover:border-[#1d211c] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Later
               </button>
             </div>
-            {quote.status === "pending" ? (
+            {quoteNotSent ? (
               <p className="mt-3 text-sm text-[#62685f]">
                 Send the quote before logging an outcome.
               </p>

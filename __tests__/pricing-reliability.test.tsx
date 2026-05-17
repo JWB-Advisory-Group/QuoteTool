@@ -71,7 +71,9 @@ function quoteFor(
     customerName: "Test Customer",
     customerEmail: "test@example.com",
     customerPhone: "6315550123",
+    preferredContactMethod: "text",
     source: "Referral",
+    propertyType: "single_family",
     addressStreet: "123 Main St",
     addressCity: "Huntington",
     addressZip: "11743",
@@ -92,6 +94,7 @@ function quoteFor(
     ],
     preferredWindows: [],
     notes: "",
+    internalNotes: "",
     status: "pending",
     estimate,
     finalQuoteAmount: null,
@@ -118,7 +121,9 @@ function createInputFromQuote(quote: Quote) {
     customerName: quote.customerName,
     customerEmail: quote.customerEmail,
     customerPhone: quote.customerPhone,
+    preferredContactMethod: quote.preferredContactMethod,
     source: quote.source,
+    propertyType: quote.propertyType,
     addressStreet: quote.addressStreet,
     addressCity: quote.addressCity,
     addressZip: quote.addressZip,
@@ -367,6 +372,59 @@ describe("Dante-first pricing reliability", () => {
     expect(screen.getByText(/Choose your package/i)).toBeDefined();
     expect(screen.getByText(/Included and excluded/i)).toBeDefined();
     expect(screen.getAllByText(/Deposit/i).length).toBeGreaterThan(0);
+  });
+
+  test("public quote page makes photos optional but valuable", () => {
+    const store = cloneStore();
+    const quote = quoteFor(store, "house-wash");
+    quote.photoAttachments = [];
+    quote.estimate = calculateEstimate(store, {
+      serviceSlug: quote.serviceSlug,
+      jobSize: quote.jobSize,
+      jobSizeLabel: quote.jobSizeLabel,
+      stories: quote.stories,
+      urgency: quote.urgency,
+      zip: quote.addressZip,
+      source: quote.source,
+      serviceLines: quote.serviceLines,
+      serviceDetails: quote.serviceDetails,
+      riskProfile: quote.riskProfile,
+      photoAttachments: [],
+    });
+
+    render(<PublicQuoteView quote={quote} surveyRequired={false} expired={false} />);
+
+    expect(screen.getByText(/This is an estimated quote/i)).toBeDefined();
+    expect(screen.getByText(/Upload photos for an actual quote/i)).toBeDefined();
+    expect(screen.getByText(/Skip them if you prefer an estimated quote/i)).toBeDefined();
+  });
+
+  test("customer photo uploads attach to the lead and clear the photo follow-up stage", async () => {
+    const storeModule = await freshStoreModule();
+    const quote = await storeModule.createQuote(
+      createInputFromQuote({
+        ...quoteFor(cloneStore(), "house-wash"),
+        photoAttachments: [],
+      }),
+    );
+
+    expect(quote.estimate.followUpStage).toBe("Needs photos");
+
+    const updated = await storeModule.addQuotePhotos(quote.id, [
+      {
+        id: "upload_1",
+        name: "front.jpg",
+        dataUrl: "data:image/jpeg;base64,abc",
+      },
+      {
+        id: "upload_2",
+        name: "worst-area.jpg",
+        dataUrl: "data:image/jpeg;base64,abc",
+      },
+    ]);
+
+    expect(updated?.photoAttachments).toHaveLength(2);
+    expect(updated?.estimate.followUpStage).toBe("Ready to quote");
   });
 
   test("service-specific requirements create owner review flags and photo guidance", () => {

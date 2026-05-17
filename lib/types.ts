@@ -10,6 +10,7 @@ export type QuoteMode = "instant" | "review_required" | "survey_required";
 
 export type QuoteStatus =
   | "pending"
+  | "contacted"
   | "sent"
   | "approved"
   | "awaiting_deposit"
@@ -17,6 +18,19 @@ export type QuoteStatus =
   | "won"
   | "lost"
   | "no_response";
+
+export type PropertyType =
+  | "single_family"
+  | "townhome"
+  | "condo"
+  | "multi_family"
+  | "commercial"
+  | "hoa"
+  | "other";
+
+export type PreferredContactMethod = "text" | "call" | "email";
+
+export type EstimateConfidence = "high" | "medium" | "low";
 
 export type ApprovalRecord = {
   approvedAt: string;
@@ -147,6 +161,10 @@ export type PricingInput = {
   street?: string;
   city?: string;
   source?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  propertyType?: PropertyType;
+  jobDetails?: string;
   serviceLines?: QuoteServiceLine[];
   serviceDetails?: QuoteServiceDetails;
   riskProfile?: QuoteRiskProfile;
@@ -203,6 +221,8 @@ export type PricingEstimate = {
   scheduleWindows: ScheduleWindowOption[];
   leadQuality: LeadQuality;
   leadScore: number;
+  estimateConfidence: EstimateConfidence;
+  pricingNotes: string[];
   closeProbability: number;
   followUpStage: string;
   nextFollowUpDate: string;
@@ -403,6 +423,8 @@ export type Quote = {
   customerEmail: string;
   customerPhone: string;
   source: string;
+  propertyType: PropertyType;
+  preferredContactMethod: PreferredContactMethod;
   addressStreet: string;
   addressCity: string;
   addressZip: string;
@@ -417,6 +439,7 @@ export type Quote = {
   photoAttachments: PhotoAttachment[];
   preferredWindows: PreferredWindow[];
   notes: string;
+  internalNotes: string;
   status: QuoteStatus;
   estimate: PricingEstimate;
   finalQuoteAmount: number | null;

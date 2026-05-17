@@ -18,7 +18,7 @@ function addBusinessDaysFrom(base: string | null, days: number) {
 export function followUpTasksForQuote(quote: Quote): FollowUpTask[] {
   const sentTaskIds = new Set(quote.followUps.map((item) => item.taskId));
   const baseTasks =
-    quote.status === "pending"
+    quote.status === "pending" || quote.status === "contacted"
       ? quote.estimate.followUpPlan
       : tasksForActiveQuote(quote);
 

@@ -16,7 +16,9 @@ import {
 import { DashboardLogin } from "@/components/dashboard-login";
 import { followUpTasksForQuote, isTaskDue } from "@/lib/follow-ups";
 import { formatAddressLine, formatDate, formatMoney } from "@/lib/format";
+import { buildOwnerMessageTemplates } from "@/lib/message-templates";
 import { getMarketRows } from "@/lib/pricing";
+import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
 import { isDashboardAuthed } from "@/lib/server/auth";
 import { getQuote } from "@/lib/server/store";
 import { QuoteActions } from "@/app/dashboard/quotes/[id]/quote-actions";
@@ -24,6 +26,8 @@ import { ActualsBackfill } from "@/app/dashboard/quotes/[id]/actuals-backfill";
 import { RequestPhotosButton } from "@/app/dashboard/quotes/[id]/request-photos-button";
 import { MarkDepositButton } from "@/app/dashboard/quotes/[id]/mark-deposit-button";
 import { FollowUpButton } from "@/app/dashboard/quotes/[id]/follow-up-button";
+import { MessageTemplatesPanel } from "@/app/dashboard/quotes/[id]/message-templates-panel";
+import { StatusControl } from "@/app/dashboard/quotes/[id]/status-control";
 
 export default async function QuoteDetailPage({
   params,
@@ -49,6 +53,7 @@ export default async function QuoteDetailPage({
     quote.estimate.marketAnchor !== null &&
     quote.estimate.floorBandHigh > quote.estimate.marketAnchor;
   const followUpTasks = followUpTasksForQuote(quote);
+  const messageTemplates = buildOwnerMessageTemplates(quote);
 
   return (
     <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-[#1d211c] sm:px-6 lg:px-8">
@@ -97,7 +102,7 @@ export default async function QuoteDetailPage({
                   </div>
                 </div>
                 <span className="rounded-md bg-[#eef0ea] px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-[#545b4f]">
-                  {quote.status.replace("_", " ")}
+                  {quote.status.replaceAll("_", " ")}
                 </span>
               </div>
 
@@ -189,9 +194,20 @@ export default async function QuoteDetailPage({
               <h2 className="text-lg font-semibold tracking-tight">Pricing basis</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Detail label="Job size" value={`${quote.jobSizeLabel} · ${quote.jobSize}`} />
+                <Detail
+                  label="Property"
+                  value={propertyTypeLabels[quote.propertyType] ?? quote.propertyType}
+                />
                 <Detail label="Stories" value={`${quote.stories}`} />
                 <Detail label="Urgency" value={quote.urgency.replace("_", " ")} />
                 <Detail label="Source" value={quote.source} />
+                <Detail
+                  label="Preferred contact"
+                  value={
+                    preferredContactLabels[quote.preferredContactMethod] ??
+                    quote.preferredContactMethod
+                  }
+                />
                 <Detail
                   label="Market median"
                   value={formatMoney(quote.estimate.marketMedian)}
@@ -211,6 +227,10 @@ export default async function QuoteDetailPage({
                 <Detail
                   label="Lead score"
                   value={`${quote.estimate.leadScore}/100`}
+                />
+                <Detail
+                  label="Price confidence"
+                  value={quote.estimate.estimateConfidence}
                 />
                 <Detail
                   label="Risk multiplier"
@@ -323,6 +343,19 @@ export default async function QuoteDetailPage({
                   />
                 </div>
               </div>
+
+              {quote.estimate.pricingNotes.length > 0 ? (
+                <div className="mt-5 rounded-md border border-[#e4e0d5] bg-white p-4">
+                  <div className="mb-3 text-sm font-semibold">Pricing notes</div>
+                  <div className="space-y-2">
+                    {quote.estimate.pricingNotes.map((note) => (
+                      <p key={note} className="text-sm leading-6 text-[#62685f]">
+                        {note}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-5 rounded-md border border-[#e4e0d5] bg-white p-4">
                 <div className="mb-3 text-sm font-semibold">
@@ -593,11 +626,24 @@ export default async function QuoteDetailPage({
               <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
                 <Detail label="Email" value={quote.customerEmail} />
                 <Detail label="Phone" value={quote.customerPhone || "Not provided"} />
+                <Detail
+                  label="Preferred contact"
+                  value={
+                    preferredContactLabels[quote.preferredContactMethod] ??
+                    quote.preferredContactMethod
+                  }
+                />
+                <Detail
+                  label="Property"
+                  value={propertyTypeLabels[quote.propertyType] ?? quote.propertyType}
+                />
               </div>
             </div>
           </section>
 
           <aside className="space-y-5">
+            <StatusControl quoteId={quote.id} status={quote.status} />
+            <MessageTemplatesPanel templates={messageTemplates} />
             <QuoteActions quote={quote} />
 
             <div className="rounded-lg border border-[#d8d4c7] bg-white p-5 shadow-sm">

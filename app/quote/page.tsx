@@ -2,6 +2,8 @@ import { loadStore } from "@/lib/server/store";
 import { QuoteForm, QuoteTrustRail } from "@/app/quote/quote-form";
 import { businessProfile } from "@/lib/business";
 
+export const dynamic = "force-dynamic";
+
 export default async function QuotePage() {
   const store = await loadStore();
 

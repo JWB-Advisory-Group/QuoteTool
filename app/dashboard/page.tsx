@@ -12,6 +12,7 @@ import {
   Copy,
   Lock,
   MapPin,
+  MessageSquareText,
   Navigation,
   Phone,
   Repeat,
@@ -26,6 +27,7 @@ import { DashboardLogin } from "@/components/dashboard-login";
 import { followUpTasksForQuote, isTaskDue } from "@/lib/follow-ups";
 import { cleanCity, cleanZip, formatAddressLine, formatDate, formatMoney } from "@/lib/format";
 import { getAiUnlockState } from "@/lib/pricing";
+import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
 import { dashboardAuthEnabled, isDashboardAuthed } from "@/lib/server/auth";
 import {
   getCompliance,
@@ -54,7 +56,9 @@ export default async function DashboardPage({
   const unlock = getAiUnlockState(store);
   const notificationHealth = getNotificationHealth();
   const sourceRoi = getSourceRoi(store);
-  const pending = store.quotes.filter((quote) => quote.status === "pending");
+  const pending = store.quotes.filter((quote) =>
+    quote.status === "pending" || quote.status === "contacted",
+  );
   const approved = store.quotes.filter(
     (quote) =>
       quote.status === "approved" ||
@@ -73,7 +77,13 @@ export default async function DashboardPage({
   );
   const expiringSoon = store.quotes.filter((quote) => {
     if (!quote.expiresAt) return false;
-    if (quote.status !== "sent" && quote.status !== "pending") return false;
+    if (
+      quote.status !== "sent" &&
+      quote.status !== "pending" &&
+      quote.status !== "contacted"
+    ) {
+      return false;
+    }
     const hoursLeft =
       (new Date(quote.expiresAt).getTime() - renderedAtMs) / 1000 / 60 / 60;
     return hoursLeft > 0 && hoursLeft <= 72;
@@ -376,8 +386,14 @@ export default async function DashboardPage({
             </div>
             <div className="divide-y divide-[#ece8dd]">
               {store.quotes.length === 0 ? (
-                <div className="px-5 py-10 text-sm text-[#62685f]">
-                  No quote requests yet.
+                <div className="px-5 py-10">
+                  <div className="text-sm font-semibold">No quote requests yet.</div>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-[#62685f]">
+                    Local development seeds demo leads by default. If this is a
+                    clean production store, the first live form submission will
+                    appear here with service, contact, range, photos, and next
+                    action.
+                  </p>
                 </div>
               ) : (
                 store.quotes.map((quote) => (
@@ -487,6 +503,13 @@ function telHref(phone: string): string {
   return `tel:+${normalized}`;
 }
 
+function smsHref(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  const normalized = digits.length === 10 ? `1${digits}` : digits;
+  return `sms:+${normalized}`;
+}
+
 function mapsHref(quote: Quote): string {
   const line = formatAddressLine(
     quote.addressStreet,
@@ -505,6 +528,7 @@ function PipelineRow({
   renderedAtMs: number;
 }) {
   const tel = telHref(quote.customerPhone);
+  const sms = smsHref(quote.customerPhone);
   const maps = mapsHref(quote);
   const detailHref = `/dashboard/quotes/${quote.id}`;
   const market = quote.estimate.marketComparison;
@@ -572,6 +596,11 @@ function PipelineRow({
         <div className="mt-1 text-sm text-[#62685f]">
           {serviceBundleLabel(quote)}
         </div>
+        <div className="mt-1 text-xs font-medium text-[#7a806f]">
+          {propertyTypeLabels[quote.propertyType] ?? quote.propertyType} · Prefers{" "}
+          {preferredContactLabels[quote.preferredContactMethod] ??
+            quote.preferredContactMethod}
+        </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <TinyMeta icon={<Camera size={13} />}>
             {quote.photoAttachments.length} photos
@@ -630,6 +659,15 @@ function PipelineRow({
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#cbc7bb] bg-white text-[#1d211c] transition hover:border-[#1d211c]"
           >
             <Phone size={16} />
+          </a>
+        ) : null}
+        {sms ? (
+          <a
+            href={sms}
+            aria-label={`Text ${quote.customerName}`}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#cbc7bb] bg-white text-[#1d211c] transition hover:border-[#1d211c]"
+          >
+            <MessageSquareText size={16} />
           </a>
         ) : null}
         {maps ? (
@@ -779,6 +817,8 @@ function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "won"
       ? "bg-[#e8f8dc] text-[#315b22]"
+      : status === "contacted"
+        ? "bg-[#eef2fb] text-[#2a47a5]"
       : status === "approved" || status === "scheduled"
         ? "bg-[#dff0ce] text-[#315b22]"
         : status === "awaiting_deposit"

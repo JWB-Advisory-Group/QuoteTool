@@ -94,6 +94,22 @@ const preferredWindowSchema = z.object({
   time: z.enum(["morning", "afternoon", "flexible"]),
 });
 
+const propertyTypeSchema = z
+  .enum([
+    "single_family",
+    "townhome",
+    "condo",
+    "multi_family",
+    "commercial",
+    "hoa",
+    "other",
+  ])
+  .default("single_family");
+
+const preferredContactMethodSchema = z
+  .enum(["text", "call", "email"])
+  .default("text");
+
 const KNOWN_SERVICE_SLUGS = [
   "house-wash",
   "window-cleaning",
@@ -115,7 +131,9 @@ export const quoteRequestSchema = z.object({
     .union([z.literal(""), z.string().trim().email("Email looks invalid").max(254)])
     .default(""),
   customerPhone: cleanOptional(40),
+  preferredContactMethod: preferredContactMethodSchema,
   source: cleanOptional(80).transform((value) => value || "Not provided"),
+  propertyType: propertyTypeSchema,
   addressStreet: cleanString(200).pipe(z.string().min(1, "Street address is required")),
   addressCity: cleanString(100).pipe(z.string().min(1, "City is required")),
   addressZip: z.string().trim().regex(/^\d{5}$/, "ZIP must be 5 digits"),
@@ -159,6 +177,31 @@ export const quoteRequestSchema = z.object({
   photoAttachments: z.array(photoAttachmentSchema).max(6).default([]),
   preferredWindows: z.array(preferredWindowSchema).max(3).default([]),
   notes: cleanOptional(2000),
+}).superRefine((data, ctx) => {
+  const hasPhone = data.customerPhone.replace(/\D/g, "").length >= 10;
+  const hasEmail = Boolean(data.customerEmail.trim());
+
+  if (!hasPhone && !hasEmail) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["customerPhone"],
+      message: "Add a phone number or email so Dante can respond.",
+    });
+  }
+  if (data.preferredContactMethod !== "email" && !hasPhone) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["customerPhone"],
+      message: "Text or call requires a phone number.",
+    });
+  }
+  if (data.preferredContactMethod === "email" && !hasEmail) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["customerEmail"],
+      message: "Email is required if email is your preferred contact method.",
+    });
+  }
 });
 
 export const previewRequestSchema = z.object({
@@ -191,10 +234,28 @@ export const requestPhotosSchema = z.object({
   channel: z.enum(["sms", "email", "both"]).default("both"),
 });
 
+export const quotePhotosSchema = z.object({
+  photoAttachments: z.array(photoAttachmentSchema).min(1).max(6),
+});
+
 export const followUpSchema = z.object({
   taskId: z.string().trim().min(1).max(64),
   channel: z.enum(["sms", "email", "call"]).default("sms"),
   message: cleanOptional(700),
+});
+
+export const quoteStatusSchema = z.object({
+  status: z.enum([
+    "pending",
+    "contacted",
+    "sent",
+    "approved",
+    "awaiting_deposit",
+    "scheduled",
+    "won",
+    "lost",
+    "no_response",
+  ]),
 });
 
 export const jobActualsSchema = z.object({

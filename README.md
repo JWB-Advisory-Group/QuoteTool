@@ -11,12 +11,17 @@ pnpm dev
 
 Open `http://localhost:3000` (it redirects to `/quote`).
 
+Local development seeds six realistic demo leads on first load so the dashboard
+is useful immediately. Set `DEMO_QUOTES=off` to start with an empty queue, or
+delete `.data/` and restart to reseed.
+
 ## Routes
 
 | Path | Purpose |
 | --- | --- |
-| `/quote` | Customer intake. 4 steps, photo upload, instant range, three packages, one-tap approve. |
-| `/dashboard` | Dante's queue. Lead quality, route zone, protected floor, follow-up stage. |
+| `/quote` | Customer intake. 4 steps, optional photo upload, estimated range, three packages, one-tap approve. |
+| `/quote/[id]#photos` | Public quote review with optional post-submit photo upload to move from estimated quote to actual quote review. |
+| `/dashboard` | Dante's queue. Lead quality, route zone, protected floor, preferred contact, follow-up stage. |
 | `/dashboard/quotes/[id]` | Review a quote, send a confirmed price, log outcomes and actuals. |
 | `/api/cron` | Daily outcome SMS fanout. |
 | `/api/webhooks/twilio-inbound` | Accepts `WON 625`, `LOST`, `NO RESPONSE`, or `LATER`. |
@@ -59,6 +64,9 @@ If any of these are unset, that channel is skipped (logged, not sent).
 ## Local data
 
 The app seeds and writes `.data/pricing-agent.json` on first boot. To start clean, delete `.data/` and restart `pnpm dev`. To experiment without polluting the seed file, set `LOCAL_DATA_PATH=/tmp/whatever.json`.
+
+Editable pricing assumptions live in `lib/pricing-config.ts` and service cost
+inputs live in `lib/server/seeds.ts` / `/dashboard/costs`.
 
 ## Deposit collection (Stripe)
 
