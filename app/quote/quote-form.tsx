@@ -106,6 +106,15 @@ const photoChecklistByService: Record<string, string[]> = {
   painting: ["Each side/room", "repairs", "paint failure"],
 };
 
+const primaryServiceSlugs = new Set([
+  "house-wash",
+  "window-cleaning",
+  "gutters",
+  "patio-wash",
+  "roof-wash",
+  "paver-refresh",
+]);
+
 function defaultLine(service: Service): QuoteServiceLine {
   const size = service.sizeOptions[1] ?? service.sizeOptions[0];
   return {
@@ -141,6 +150,7 @@ export function QuoteForm({ services }: { services: Service[] }) {
   const [fieldErrors, setFieldErrors] = useState<StepFieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
+  const [showAllServices, setShowAllServices] = useState(false);
   const [form, setForm] = useState<FormState>({
     serviceSlug: firstService.slug,
     jobSize: firstService.sizeOptions[1].value,
@@ -220,6 +230,18 @@ export function QuoteForm({ services }: { services: Service[] }) {
     () => new Set(form.serviceLines.map((line) => line.serviceSlug)),
     [form.serviceLines],
   );
+  const visibleServices = useMemo(
+    () =>
+      showAllServices
+        ? services
+        : services.filter(
+            (service) =>
+              primaryServiceSlugs.has(service.slug) ||
+              selectedSlugs.has(service.slug),
+          ),
+    [services, selectedSlugs, showAllServices],
+  );
+  const hiddenServiceCount = Math.max(0, services.length - visibleServices.length);
   const serviceBySlug = useMemo(
     () => new Map(services.map((service) => [service.slug, service])),
     [services],
@@ -542,7 +564,7 @@ export function QuoteForm({ services }: { services: Service[] }) {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {services.map((item) => {
+              {visibleServices.map((item) => {
                 const selected = selectedSlugs.has(item.slug);
                 return (
                   <button
@@ -578,6 +600,26 @@ export function QuoteForm({ services }: { services: Service[] }) {
                 );
               })}
             </div>
+            {hiddenServiceCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllServices(true)}
+                className="inline-flex h-11 items-center gap-2 rounded-md border border-[#cbc7bb] bg-white px-4 text-sm font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+              >
+                Show {hiddenServiceCount} more service
+                {hiddenServiceCount === 1 ? "" : "s"}
+                <ChevronDown size={15} />
+              </button>
+            ) : showAllServices && services.length > primaryServiceSlugs.size ? (
+              <button
+                type="button"
+                onClick={() => setShowAllServices(false)}
+                className="inline-flex h-11 items-center gap-2 rounded-md border border-[#cbc7bb] bg-white px-4 text-sm font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+              >
+                Show most requested
+                <ChevronDown size={15} className="rotate-180" />
+              </button>
+            ) : null}
 
             <div className="space-y-4">
               {form.serviceLines.map((line) => {

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
+import { ResultPanel } from "@/app/quote/quote-result-panel";
 import { PublicQuoteView } from "@/app/quote/[id]/page";
 import { computeCostInputFromOnboarding } from "@/lib/onboarding";
 import { fitCostInputFromActuals } from "@/lib/calibration";
@@ -397,6 +398,35 @@ describe("Dante-first pricing reliability", () => {
     expect(screen.getByText(/This is an estimated quote/i)).toBeDefined();
     expect(screen.getByText(/Upload photos for an actual quote/i)).toBeDefined();
     expect(screen.getByText(/Skip them if you prefer an estimated quote/i)).toBeDefined();
+  });
+
+  test("instant result separates requested estimate from optional upgrades", () => {
+    const store = cloneStore();
+    const quote = quoteFor(store, "house-wash", "quote_result");
+
+    render(
+      <ResultPanel
+        result={{
+          quoteId: quote.id,
+          rangeLow: quote.estimate.rangeLow,
+          rangeHigh: quote.estimate.rangeHigh,
+          estimate: quote.estimate,
+          message: "",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(/This first number is for the work you requested/i),
+    ).toBeDefined();
+    expect(screen.getByText(/Requested scope/i)).toBeDefined();
+    expect(
+      screen.getByText(/Upgrades are optional add-ons, not hidden fees/i),
+    ).toBeDefined();
+    expect(screen.getByRole("link", { name: /Review quote link/i })).toHaveProperty(
+      "pathname",
+      "/quote/quote_result",
+    );
   });
 
   test("customer photo uploads attach to the lead and clear the photo follow-up stage", async () => {

@@ -48,7 +48,7 @@ export function ResultPanel({ result }: { result: SubmitResult }) {
         <span className="font-medium text-[#1d211c]">
           {result.quoteId.slice(0, 8)}
         </span>
-        {`. Dante will review the scope and send a quote link with final package options, dates, and any deposit step.`}
+        {`. This first number is for the work you requested. Upgrade options below add same-visit services and Dante will confirm the final package, dates, and any deposit step.`}
       </p>
 
       {needsPhotos ? (
@@ -60,10 +60,16 @@ export function ResultPanel({ result }: { result: SubmitResult }) {
       ) : null}
 
       <div className="mt-6">
-        <div className="text-sm font-semibold">Likely package options</div>
+        <div className="text-sm font-semibold">Next choices</div>
+        <p className="mt-1 text-xs leading-5 text-[#62685f]">
+          Essential stays closest to the estimate. Upgrades are optional
+          add-ons, not hidden fees.
+        </p>
         <div className="mt-3 grid gap-3">
           {packageOptions.map((option) => {
             const isSelected = selectedPackage?.id === option.id;
+            const upgradeDelta = Math.max(0, option.price - result.rangeHigh);
+            const isRequestedScope = option.id === "essential";
             return (
               <button
                 key={option.id}
@@ -80,6 +86,11 @@ export function ResultPanel({ result }: { result: SubmitResult }) {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold">{option.name}</h3>
+                      {isRequestedScope ? (
+                        <span className="rounded-md bg-[#eef0ea] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#545b4f]">
+                          Requested scope
+                        </span>
+                      ) : null}
                       {option.badge ? (
                         <span className="rounded-md bg-[#d8f269] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#1d211c]">
                           {option.badge}
@@ -92,6 +103,15 @@ export function ResultPanel({ result }: { result: SubmitResult }) {
                   </div>
                   <div className="text-lg font-semibold">
                     {formatMoney(option.price)}
+                    {upgradeDelta > 0 ? (
+                      <div className="text-right text-[11px] font-semibold text-[#7a5400]">
+                        +{formatMoney(upgradeDelta)} upgrade
+                      </div>
+                    ) : (
+                      <div className="text-right text-[11px] font-semibold text-[#547a25]">
+                        in estimate band
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3 space-y-1">
@@ -105,7 +125,7 @@ export function ResultPanel({ result }: { result: SubmitResult }) {
                 {isSelected ? (
                   <div className="mt-3 inline-flex items-center gap-1 rounded-md bg-[#1d211c] px-2 py-1 text-xs font-semibold text-white">
                     <Check size={12} />
-                    Selected preview
+                    Selected
                   </div>
                 ) : null}
                 {option.bundleSavings > 0 ? (
@@ -218,19 +238,25 @@ export function ResultPanel({ result }: { result: SubmitResult }) {
             Upload photos for actual quote
           </Link>
         ) : null}
+        <Link
+          className="inline-flex h-12 items-center justify-center rounded-md border border-[#cbc7bb] px-4 text-center text-sm font-semibold transition hover:border-[#1d211c]"
+          href={`/quote/${result.quoteId}`}
+        >
+          Review quote link
+        </Link>
         <a
           className="inline-flex h-12 items-center justify-center rounded-md bg-[#1d211c] px-4 text-sm font-semibold text-white transition hover:bg-[#30372e]"
           href="tel:+16318503601"
         >
           Talk to a person
         </a>
-        <Link
-          className="inline-flex h-12 items-center justify-center rounded-md border border-[#cbc7bb] px-4 text-sm font-semibold transition hover:border-[#1d211c]"
-          href="/quote"
-        >
-          Start another quote
-        </Link>
       </div>
+      <Link
+        className="mt-3 inline-flex text-sm font-semibold text-[#62685f] underline-offset-4 hover:text-[#1d211c] hover:underline"
+        href="/quote"
+      >
+        Start another quote
+      </Link>
     </div>
   );
 }

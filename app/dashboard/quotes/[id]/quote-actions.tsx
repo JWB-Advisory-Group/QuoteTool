@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
+  Copy,
+  ExternalLink,
   Loader2,
   Send,
   ThumbsDown,
@@ -35,8 +37,10 @@ export function QuoteActions({ quote }: { quote: Quote }) {
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [message, setMessage] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const customerQuotePath = `/quote/${quote.id}`;
   const estimatedHours = quote.estimate.laborHours;
   const belowFloor = amount < quote.estimate.floorBandHigh;
   const reviewReasons = reviewReasonsFor(quote, amount);
@@ -66,6 +70,17 @@ export function QuoteActions({ quote }: { quote: Quote }) {
       setMessage(error instanceof Error ? error.message : "Could not send quote");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function copyCustomerLink() {
+    setCopyMessage("");
+    try {
+      const url = new URL(customerQuotePath, window.location.origin).toString();
+      await navigator.clipboard.writeText(url);
+      setCopyMessage("Customer link copied.");
+    } catch {
+      setCopyMessage("Could not copy automatically. Open the link and copy it.");
     }
   }
 
@@ -110,6 +125,39 @@ export function QuoteActions({ quote }: { quote: Quote }) {
       {step === "actions" ? (
         <>
           <h2 className="text-lg font-semibold tracking-tight">Quote controls</h2>
+          <div className="mt-4 rounded-md border border-[#d7e8c7] bg-[#f4fbef] p-3">
+            <div className="text-sm font-semibold text-[#315b22]">
+              Customer approval link
+            </div>
+            <p className="mt-1 text-xs leading-5 text-[#3a6c2c]">
+              Send this after review. It opens package choices, scope, booking
+              windows, approval, and deposit if required.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <a
+                href={customerQuotePath}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#1d211c] px-3 text-sm font-semibold text-white transition hover:bg-[#30372e]"
+              >
+                <ExternalLink size={15} />
+                Open customer link
+              </a>
+              <button
+                type="button"
+                onClick={copyCustomerLink}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#cbe0c2] bg-white px-3 text-sm font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+              >
+                <Copy size={15} />
+                Copy link
+              </button>
+            </div>
+            {copyMessage ? (
+              <p className="mt-2 text-xs font-semibold text-[#315b22]">
+                {copyMessage}
+              </p>
+            ) : null}
+          </div>
           <div className="mt-4 rounded-md border border-[#e4e0d5] bg-[#fbfaf7] p-3">
             <div className="text-sm font-semibold">Package prices</div>
             <div className="mt-3 grid gap-2">

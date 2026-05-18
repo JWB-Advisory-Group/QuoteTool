@@ -642,7 +642,11 @@ export default async function QuoteDetailPage({
           </section>
 
           <aside className="space-y-5">
-            <StatusControl quoteId={quote.id} status={quote.status} />
+            <StatusControl
+              key={quote.status}
+              quoteId={quote.id}
+              status={quote.status}
+            />
             <MessageTemplatesPanel templates={messageTemplates} />
             <QuoteActions quote={quote} />
 

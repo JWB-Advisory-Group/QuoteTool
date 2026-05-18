@@ -39,10 +39,12 @@ import {
 import { getNotificationHealth } from "@/lib/server/notifications";
 import type { Quote, SourceRoiRow } from "@/lib/types";
 
+type PipelineFilter = "all" | "ready" | "photos" | "followup" | "quoted" | "booking";
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; stage?: string }>;
 }) {
   const params = searchParams ? await searchParams : {};
   if (!(await isDashboardAuthed())) {
@@ -58,15 +60,9 @@ export default async function DashboardPage({
   const notificationHealth = getNotificationHealth();
   const storageHealth = getStorageHealth();
   const sourceRoi = getSourceRoi(store);
-  const pending = store.quotes.filter((quote) =>
-    quote.status === "pending" || quote.status === "contacted",
-  );
-  const approved = store.quotes.filter(
-    (quote) =>
-      quote.status === "approved" ||
-      quote.status === "awaiting_deposit" ||
-      quote.status === "scheduled",
-  );
+  const pending = store.quotes.filter(isPendingQuote);
+  const approved = store.quotes.filter(isBookingQuote);
+  const sentQuotes = store.quotes.filter((quote) => quote.status === "sent");
   const today = renderedAt.toISOString().slice(0, 10);
   const needsPhotos = pending.filter(
     (quote) => quote.photoAttachments.length === 0,
@@ -81,8 +77,7 @@ export default async function DashboardPage({
     if (!quote.expiresAt) return false;
     if (
       quote.status !== "sent" &&
-      quote.status !== "pending" &&
-      quote.status !== "contacted"
+      !isPendingQuote(quote)
     ) {
       return false;
     }
@@ -117,6 +112,31 @@ export default async function DashboardPage({
     if (outcome.actuals && outcome.actuals.hours !== null) return false;
     return true;
   });
+  const requestedPipelineFilter = params.stage as PipelineFilter;
+  const pipelineFilters: {
+    key: PipelineFilter;
+    label: string;
+    count: number;
+  }[] = [
+    { key: "all", label: "All", count: store.quotes.length },
+    { key: "ready", label: "Ready", count: readyToQuote.length },
+    { key: "photos", label: "Needs photos", count: needsPhotos.length },
+    { key: "followup", label: "Follow-up", count: followUpDue.length },
+    { key: "quoted", label: "Quoted", count: sentQuotes.length },
+    { key: "booking", label: "Booking", count: approved.length },
+  ];
+  const activePipelineFilter = pipelineFilters.some(
+    (filter) => filter.key === requestedPipelineFilter,
+  )
+    ? requestedPipelineFilter
+    : "all";
+  const pipelineQuotes = store.quotes
+    .filter((quote) => matchesPipelineFilter(quote, activePipelineFilter, today))
+    .sort((a, b) => {
+      const rankDelta = pipelineRank(a, today) - pipelineRank(b, today);
+      if (rankDelta !== 0) return rankDelta;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   return (
     <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-[#1d211c] sm:px-6 lg:px-8">
@@ -404,13 +424,26 @@ export default async function DashboardPage({
 
           <div className="rounded-lg border border-[#d8d4c7] bg-white shadow-sm lg:col-start-1 lg:row-start-1">
             <div className="border-b border-[#e7e3d8] px-5 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-lg font-semibold tracking-tight">
-                  Booking pipeline
-                </h2>
-                <span className="text-sm font-medium text-[#62685f]">
-                  {store.quotes.length} total leads
-                </span>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-4">
+                  <h2 className="text-lg font-semibold tracking-tight">
+                    Booking pipeline
+                  </h2>
+                  <span className="text-sm font-medium text-[#62685f]">
+                    {pipelineQuotes.length} shown · {store.quotes.length} total
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pipelineFilters.map((filter) => (
+                    <PipelineFilterLink
+                      key={filter.key}
+                      filter={filter.key}
+                      active={activePipelineFilter === filter.key}
+                      label={filter.label}
+                      count={filter.count}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
             <div className="divide-y divide-[#ece8dd]">
@@ -424,8 +457,18 @@ export default async function DashboardPage({
                     action.
                   </p>
                 </div>
+              ) : pipelineQuotes.length === 0 ? (
+                <div className="px-5 py-10">
+                  <div className="text-sm font-semibold">
+                    Nothing in this lane.
+                  </div>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-[#62685f]">
+                    Switch lanes above or use Chase today to jump to the next
+                    money action.
+                  </p>
+                </div>
               ) : (
-                store.quotes.map((quote) => (
+                pipelineQuotes.map((quote) => (
                   <PipelineRow
                     key={quote.id}
                     quote={quote}
@@ -547,6 +590,88 @@ function mapsHref(quote: Quote): string {
   );
   if (!line) return "";
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(line)}`;
+}
+
+function isPendingQuote(quote: Quote) {
+  return quote.status === "pending" || quote.status === "contacted";
+}
+
+function isBookingQuote(quote: Quote) {
+  return (
+    quote.status === "approved" ||
+    quote.status === "awaiting_deposit" ||
+    quote.status === "scheduled"
+  );
+}
+
+function quoteHasPhotos(quote: Quote) {
+  return quote.photoAttachments.length > 0;
+}
+
+function quoteHasDueFollowUp(quote: Quote, today: string) {
+  return followUpTasksForQuote(quote).some((task) => isTaskDue(task, today));
+}
+
+function matchesPipelineFilter(
+  quote: Quote,
+  filter: PipelineFilter,
+  today: string,
+) {
+  if (filter === "all") return true;
+  if (filter === "ready") {
+    return isPendingQuote(quote) && quoteHasPhotos(quote);
+  }
+  if (filter === "photos") {
+    return isPendingQuote(quote) && !quoteHasPhotos(quote);
+  }
+  if (filter === "followup") {
+    return quoteHasDueFollowUp(quote, today);
+  }
+  if (filter === "quoted") return quote.status === "sent";
+  return isBookingQuote(quote);
+}
+
+function pipelineRank(quote: Quote, today: string) {
+  if (isBookingQuote(quote)) return 0;
+  if (quoteHasDueFollowUp(quote, today)) return 1;
+  if (isPendingQuote(quote) && quoteHasPhotos(quote)) return 2;
+  if (isPendingQuote(quote) && !quoteHasPhotos(quote)) return 3;
+  if (quote.status === "sent") return 4;
+  return 5;
+}
+
+function PipelineFilterLink({
+  filter,
+  active,
+  label,
+  count,
+}: {
+  filter: PipelineFilter;
+  active: boolean;
+  label: string;
+  count: number;
+}) {
+  const href = filter === "all" ? "/dashboard" : `/dashboard?stage=${filter}`;
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${
+        active
+          ? "border-[#1d211c] bg-[#1d211c] text-white"
+          : "border-[#d8d4c7] bg-[#fbfaf7] text-[#1d211c] hover:border-[#1d211c]"
+      }`}
+    >
+      {label}
+      <span
+        className={`rounded-md px-1.5 py-0.5 text-[11px] ${
+          active ? "bg-white/15 text-white" : "bg-white text-[#62685f]"
+        }`}
+      >
+        {count}
+      </span>
+    </Link>
+  );
 }
 
 function PipelineRow({
