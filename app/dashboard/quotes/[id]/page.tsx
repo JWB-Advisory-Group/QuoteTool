@@ -7,14 +7,21 @@ import {
   CalendarDays,
   Camera,
   CheckCircle2,
+  ClipboardCheck,
   Clock,
   DollarSign,
+  ExternalLink,
+  FileText,
   MapPin,
+  MessageSquareText,
+  Navigation,
+  Phone,
   ShieldCheck,
   Users,
 } from "lucide-react";
 import { DashboardLogin } from "@/components/dashboard-login";
 import { followUpTasksForQuote, isTaskDue } from "@/lib/follow-ups";
+import { buildJobBrief, type JobBrief } from "@/lib/job-brief";
 import { formatAddressLine, formatDate, formatMoney } from "@/lib/format";
 import { buildOwnerMessageTemplates } from "@/lib/message-templates";
 import { getMarketRows } from "@/lib/pricing";
@@ -54,6 +61,7 @@ export default async function QuoteDetailPage({
     quote.estimate.floorBandHigh > quote.estimate.marketAnchor;
   const followUpTasks = followUpTasksForQuote(quote);
   const messageTemplates = buildOwnerMessageTemplates(quote);
+  const jobBrief = buildJobBrief(quote);
 
   return (
     <main className="min-h-screen bg-[#f7f6f2] px-4 py-6 text-[#1d211c] sm:px-6 lg:px-8">
@@ -72,6 +80,10 @@ export default async function QuoteDetailPage({
           <span aria-hidden="true">/</span>
           <span className="font-semibold text-[#1d211c]">{quote.customerName}</span>
         </nav>
+
+        <div className="mb-5 lg:hidden">
+          <JobBriefPanel brief={jobBrief} />
+        </div>
 
         <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
           <section className="space-y-5">
@@ -642,6 +654,9 @@ export default async function QuoteDetailPage({
           </section>
 
           <aside className="space-y-5">
+            <div className="hidden lg:block">
+              <JobBriefPanel brief={jobBrief} />
+            </div>
             <StatusControl
               key={quote.status}
               quoteId={quote.id}
@@ -784,6 +799,171 @@ export default async function QuoteDetailPage({
       </div>
     </main>
   );
+}
+
+function JobBriefPanel({ brief }: { brief: JobBrief }) {
+  const tone = briefTone(brief.tone);
+  return (
+    <div className={`rounded-lg border p-5 shadow-sm ${tone.card}`}>
+      <div className="flex items-start gap-3">
+        <div
+          className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tone.iconBox}`}
+        >
+          <ClipboardCheck size={18} />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Job brief</h2>
+          <p className="mt-1 text-sm font-semibold">{brief.headline}</p>
+          <p className="mt-1 text-sm leading-5 text-[#62685f]">{brief.subhead}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {brief.callHref ? (
+          <BriefAction href={brief.callHref} icon={<Phone size={14} />} label="Call" />
+        ) : null}
+        {brief.smsHref ? (
+          <BriefAction
+            href={brief.smsHref}
+            icon={<MessageSquareText size={14} />}
+            label="Text"
+          />
+        ) : null}
+        {brief.mapsHref ? (
+          <BriefAction
+            href={brief.mapsHref}
+            icon={<Navigation size={14} />}
+            label="Map"
+            external
+          />
+        ) : null}
+        <BriefAction
+          href={brief.publicQuoteHref}
+          icon={<ExternalLink size={14} />}
+          label="Public quote"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {brief.checks.map((check) => (
+          <BriefCheck key={check.label} check={check} />
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-md bg-white/70 p-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#7a806f]">
+          <Users size={13} />
+          Crew plan
+        </div>
+        <div className="mt-2 space-y-2">
+          {brief.crewPlan.map((item) => (
+            <p key={item} className="text-sm leading-5 text-[#62685f]">
+              {item}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      {brief.riskFlags.length > 0 ? (
+        <div className="mt-4 rounded-md border border-[#f1d18a] bg-[#fff8e5] p-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#7a5400]">
+            <AlertTriangle size={13} />
+            Watch before dispatch
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {brief.riskFlags.map((flag) => (
+              <span
+                key={flag}
+                className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#7a5400]"
+              >
+                {flag}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-md border border-[#e4e0d5] bg-white p-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#7a806f]">
+          <FileText size={13} />
+          Every job checklist
+        </div>
+        <div className="mt-2 space-y-2">
+          {brief.dayOfChecklist.map((item) => (
+            <div key={item} className="flex gap-2 text-sm leading-5 text-[#62685f]">
+              <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-[#315b22]" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BriefAction({
+  href,
+  icon,
+  label,
+  external = false,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  external?: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      target={external ? "_blank" : undefined}
+      rel={external ? "noopener noreferrer" : undefined}
+      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-[#d8d4c7] bg-white px-2 text-xs font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+    >
+      {icon}
+      {label}
+    </a>
+  );
+}
+
+function BriefCheck({ check }: { check: JobBrief["checks"][number] }) {
+  const tone = briefTone(check.tone);
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tone.pill}`}>
+      <div className="text-[11px] font-semibold uppercase tracking-wide">
+        {check.label}
+      </div>
+      <div className="mt-1 text-sm font-semibold">{check.value}</div>
+    </div>
+  );
+}
+
+function briefTone(tone: JobBrief["tone"]) {
+  if (tone === "green") {
+    return {
+      card: "border-[#cbe0c2] bg-[#f4fbef]",
+      iconBox: "bg-[#315b22] text-white",
+      pill: "border-[#cbe0c2] bg-white text-[#315b22]",
+    };
+  }
+  if (tone === "amber") {
+    return {
+      card: "border-[#f1d18a] bg-[#fff8e5]",
+      iconBox: "bg-[#8a6100] text-white",
+      pill: "border-[#f1d18a] bg-white text-[#7a5400]",
+    };
+  }
+  if (tone === "red") {
+    return {
+      card: "border-[#f2b8b5] bg-[#fff5f5]",
+      iconBox: "bg-[#b42318] text-white",
+      pill: "border-[#f2b8b5] bg-white text-[#9f2b22]",
+    };
+  }
+  return {
+    card: "border-[#d8d4c7] bg-white",
+    iconBox: "bg-[#545b4f] text-white",
+    pill: "border-[#e4e0d5] bg-white text-[#545b4f]",
+  };
 }
 
 function NumberBlock({ label, value }: { label: string; value: string }) {

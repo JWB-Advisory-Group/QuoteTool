@@ -25,6 +25,10 @@ import {
 } from "lucide-react";
 import { DashboardLogin } from "@/components/dashboard-login";
 import { followUpTasksForQuote, isTaskDue } from "@/lib/follow-ups";
+import {
+  buildOwnerActionPlan,
+  type OwnerAction,
+} from "@/lib/dashboard-triage";
 import { cleanCity, cleanZip, formatAddressLine, formatDate, formatMoney } from "@/lib/format";
 import { getAiUnlockState } from "@/lib/pricing";
 import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
@@ -73,6 +77,11 @@ export default async function DashboardPage({
   const followUpDue = store.quotes.filter((quote) =>
     followUpTasksForQuote(quote).some((task) => isTaskDue(task, today)),
   );
+  const ownerActionPlan = buildOwnerActionPlan(store.quotes, today, renderedAt).slice(
+    0,
+    4,
+  );
+  const nextOwnerAction = ownerActionPlan[0] ?? null;
   const expiringSoon = store.quotes.filter((quote) => {
     if (!quote.expiresAt) return false;
     if (
@@ -325,15 +334,19 @@ export default async function DashboardPage({
                 {readyToQuote.length} ready to price
               </div>
               <div className="mt-1 text-sm text-white/70">
-                {pending.length > 0
-                  ? `Open ${readyToQuote[0]?.customerName ?? pending[0]?.customerName} first — it is the next dollar.`
+                {nextOwnerAction
+                  ? `Open ${nextOwnerAction.customerName} first — ${nextOwnerAction.title}.`
+                  : pending.length > 0
+                    ? `Open ${readyToQuote[0]?.customerName ?? pending[0]?.customerName} first — it is the next dollar.`
                   : "Pipeline is clean. Time for outreach or follow-ups."}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
                 href={
-                  readyToQuote[0]
+                  nextOwnerAction
+                    ? nextOwnerAction.href
+                    : readyToQuote[0]
                     ? `/dashboard/quotes/${readyToQuote[0].id}`
                     : pending[0]
                       ? `/dashboard/quotes/${pending[0].id}`
@@ -341,7 +354,7 @@ export default async function DashboardPage({
                 }
                 className="inline-flex h-10 items-center gap-2 rounded-md bg-[#d8f269] px-4 text-sm font-semibold text-[#1d211c] transition hover:bg-white"
               >
-                Work the next lead
+                {nextOwnerAction?.cta ?? "Work the next lead"}
                 <ArrowRight size={15} />
               </Link>
             </div>
@@ -383,43 +396,7 @@ export default async function DashboardPage({
 
         <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_340px]">
           <aside className="space-y-4 lg:col-start-2 lg:row-start-1">
-            <div className="rounded-lg border border-[#d8d4c7] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold tracking-tight">
-                Chase today
-              </h2>
-              <div className="mt-4 space-y-3">
-                <ChaseItem
-                  href={
-                    readyToQuote[0]
-                      ? `/dashboard/quotes/${readyToQuote[0].id}`
-                      : "/dashboard"
-                  }
-                  icon={<CheckCircle2 size={16} />}
-                  label={`${readyToQuote.length} ready to price`}
-                  detail="Photos are in. Review scope and send a package."
-                />
-                <ChaseItem
-                  href={
-                    needsPhotos[0]
-                      ? `/dashboard/quotes/${needsPhotos[0].id}`
-                      : "/dashboard"
-                  }
-                  icon={<Camera size={16} />}
-                  label={`${needsPhotos.length} need photos`}
-                  detail="Send complete-your-quote reminder before guessing."
-                />
-                <ChaseItem
-                  href={
-                    followUpDue[0]
-                      ? `/dashboard/quotes/${followUpDue[0].id}`
-                      : "/dashboard"
-                  }
-                  icon={<Clock size={16} />}
-                  label={`${followUpDue.length} follow-ups due`}
-                  detail="Same-day and 72-hour touches protect conversion."
-                />
-              </div>
-            </div>
+            <OwnerActionPlan actions={ownerActionPlan} />
           </aside>
 
           <div className="rounded-lg border border-[#d8d4c7] bg-white shadow-sm lg:col-start-1 lg:row-start-1">
@@ -463,8 +440,8 @@ export default async function DashboardPage({
                     Nothing in this lane.
                   </div>
                   <p className="mt-2 max-w-xl text-sm leading-6 text-[#62685f]">
-                    Switch lanes above or use Chase today to jump to the next
-                    money action.
+                    Switch lanes above or use the owner action plan to jump to
+                    the next money action.
                   </p>
                 </div>
               ) : (
@@ -922,29 +899,195 @@ function TinyMeta({
   );
 }
 
-function ChaseItem({
-  href,
-  icon,
-  label,
-  detail,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-  detail: string;
-}) {
+function OwnerActionPlan({ actions }: { actions: OwnerAction[] }) {
   return (
-    <Link
-      href={href}
-      className="block rounded-md border border-[#e4e0d5] bg-[#fbfaf7] p-3 transition hover:border-[#1d211c]"
-    >
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        {icon}
-        {label}
+    <div className="rounded-lg border border-[#d8d4c7] bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Owner action plan
+        </h2>
+        {actions.length > 0 ? (
+          <span className="rounded-md bg-[#eef0ea] px-2 py-1 text-xs font-semibold text-[#545b4f]">
+            Top {actions.length}
+          </span>
+        ) : null}
       </div>
-      <div className="mt-1 text-sm leading-5 text-[#62685f]">{detail}</div>
-    </Link>
+      {actions.length === 0 ? (
+        <div className="mt-4 rounded-md border border-[#e4e0d5] bg-[#fbfaf7] p-4">
+          <div className="text-sm font-semibold">Queue is clean.</div>
+          <p className="mt-2 text-sm leading-6 text-[#62685f]">
+            No open lead needs pricing, photos, booking, or follow-up right now.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {actions.map((action, index) => (
+            <OwnerActionCard
+              key={action.id}
+              action={action}
+              index={index}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
+}
+
+function OwnerActionCard({
+  action,
+  index,
+}: {
+  action: OwnerAction;
+  index: number;
+}) {
+  const tone = ownerActionTone(action.tone);
+  return (
+    <div
+      className={`rounded-md border p-3 transition hover:border-[#1d211c] ${tone.card}`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold ${tone.rank}`}
+        >
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span className={tone.icon}>{ownerActionIcon(action.kind)}</span>
+            <span>{action.title}</span>
+          </div>
+          <div className="mt-1 text-sm font-semibold text-[#1d211c]">
+            {action.customerName}
+          </div>
+          <p className="mt-1 text-sm leading-5 text-[#62685f]">
+            {action.reason}
+          </p>
+          <div className="mt-2 text-xs font-semibold text-[#545b4f]">
+            {action.detail}
+          </div>
+          <div className="mt-3 rounded-md bg-white/70 p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7a806f]">
+              Next move
+            </div>
+            <p className="mt-1 text-sm leading-5 text-[#1d211c]">
+              {action.nextStep}
+            </p>
+            <details className="group mt-2">
+              <summary className="cursor-pointer list-none text-xs font-semibold text-[#62685f] underline-offset-2 hover:underline [&::-webkit-details-marker]:hidden">
+                Message to use
+              </summary>
+              <p className="mt-2 text-sm leading-5 text-[#62685f]">
+                {action.message}
+              </p>
+            </details>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#62685f]">
+            <span className="rounded-md bg-white px-2 py-1">
+              {formatMoney(action.value)}
+            </span>
+            <span className="rounded-md bg-white px-2 py-1">
+              {action.stage}
+            </span>
+            {action.dueDate ? (
+              <span className="rounded-md bg-white px-2 py-1">
+                {formatDate(action.dueDate)}
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {action.callHref ? (
+              <a
+                href={action.callHref}
+                aria-label={`Call ${action.customerName}`}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#d8d4c7] bg-white px-2 text-xs font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+              >
+                <Phone size={14} />
+                Call
+              </a>
+            ) : null}
+            {action.smsHref ? (
+              <a
+                href={action.smsHref}
+                aria-label={`Text ${action.customerName}`}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#d8d4c7] bg-white px-2 text-xs font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+              >
+                <MessageSquareText size={14} />
+                Text
+              </a>
+            ) : null}
+            {action.mapsHref ? (
+              <a
+                href={action.mapsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Map ${action.customerName} job`}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#d8d4c7] bg-white px-2 text-xs font-semibold text-[#1d211c] transition hover:border-[#1d211c]"
+              >
+                <Navigation size={14} />
+                Map
+              </a>
+            ) : null}
+            <Link
+              href={action.href}
+              aria-label={`Open ${action.customerName} quote`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#1d211c] px-2 text-xs font-semibold text-white transition hover:bg-[#30372e]"
+            >
+              Open
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ownerActionTone(tone: OwnerAction["tone"]) {
+  if (tone === "green") {
+    return {
+      card: "border-[#cbe0c2] bg-[#f4fbef]",
+      rank: "bg-[#315b22] text-white",
+      icon: "text-[#315b22]",
+    };
+  }
+  if (tone === "amber") {
+    return {
+      card: "border-[#f1d18a] bg-[#fff8e5]",
+      rank: "bg-[#8a6100] text-white",
+      icon: "text-[#8a6100]",
+    };
+  }
+  if (tone === "blue") {
+    return {
+      card: "border-[#cbd7f4] bg-[#eef2fb]",
+      rank: "bg-[#2a47a5] text-white",
+      icon: "text-[#2a47a5]",
+    };
+  }
+  if (tone === "red") {
+    return {
+      card: "border-[#f2b8b5] bg-[#fff5f5]",
+      rank: "bg-[#b42318] text-white",
+      icon: "text-[#b42318]",
+    };
+  }
+  return {
+    card: "border-[#e4e0d5] bg-[#fbfaf7]",
+    rank: "bg-[#545b4f] text-white",
+    icon: "text-[#545b4f]",
+  };
+}
+
+function ownerActionIcon(kind: OwnerAction["kind"]) {
+  if (kind === "collect_deposit") return <CircleDollarSign size={16} />;
+  if (kind === "confirm_booking") return <CalendarDays size={16} />;
+  if (kind === "follow_up" || kind === "closing_window") {
+    return <Clock size={16} />;
+  }
+  if (kind === "price_ready") return <CheckCircle2 size={16} />;
+  if (kind === "request_photos") return <Camera size={16} />;
+  return <ShieldAlert size={16} />;
 }
 
 function Metric({
