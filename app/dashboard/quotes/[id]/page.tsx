@@ -22,11 +22,19 @@ import {
 import { DashboardLogin } from "@/components/dashboard-login";
 import { followUpTasksForQuote, isTaskDue } from "@/lib/follow-ups";
 import { buildJobBrief, type JobBrief } from "@/lib/job-brief";
-import { formatAddressLine, formatDate, formatMoney } from "@/lib/format";
+import {
+  formatAddressLine,
+  formatDate,
+  formatMoney,
+  formatMultiplier,
+} from "@/lib/format";
 import { buildOwnerMessageTemplates } from "@/lib/message-templates";
 import { getMarketRows } from "@/lib/pricing";
 import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
-import { isDashboardAuthed } from "@/lib/server/auth";
+import {
+  dashboardAuthMisconfigured,
+  isDashboardAuthed,
+} from "@/lib/server/auth";
 import { getQuote } from "@/lib/server/store";
 import { QuoteActions } from "@/app/dashboard/quotes/[id]/quote-actions";
 import { ActualsBackfill } from "@/app/dashboard/quotes/[id]/actuals-backfill";
@@ -42,7 +50,7 @@ export default async function QuoteDetailPage({
   params: Promise<{ id: string }>;
 }) {
   if (!(await isDashboardAuthed())) {
-    return <DashboardLogin />;
+    return <DashboardLogin misconfigured={dashboardAuthMisconfigured()} />;
   }
 
   const { id } = await params;
@@ -194,7 +202,7 @@ export default async function QuoteDetailPage({
                       <div className="mt-2 grid gap-2 text-[#62685f] sm:grid-cols-3">
                         <span>{line.laborHours} labor hr</span>
                         <span>{formatMoney(line.materials)} materials</span>
-                        <span>{line.riskMultiplier}x risk</span>
+                        <span>{formatMultiplier(line.riskMultiplier)} risk</span>
                       </div>
                     </div>
                   ))}
@@ -246,7 +254,7 @@ export default async function QuoteDetailPage({
                 />
                 <Detail
                   label="Risk multiplier"
-                  value={`${quote.estimate.riskMultiplier}x`}
+                  value={formatMultiplier(quote.estimate.riskMultiplier)}
                 />
                 <Detail
                   label="Gross profit"
@@ -331,7 +339,7 @@ export default async function QuoteDetailPage({
                   />
                   <Detail
                     label="Story multiplier"
-                    value={`${quote.estimate.storyMultiplier}x`}
+                    value={formatMultiplier(quote.estimate.storyMultiplier)}
                   />
                   <Detail
                     label="Drive/setup reserve"

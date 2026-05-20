@@ -7,5 +7,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/001-owner-triage/plan.md`
+`specs/002-customer-service-plan/plan.md`
 <!-- SPECKIT END -->

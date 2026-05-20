@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { DashboardLogin } from "@/components/dashboard-login";
-import { isDashboardAuthed } from "@/lib/server/auth";
+import {
+  dashboardAuthMisconfigured,
+  isDashboardAuthed,
+} from "@/lib/server/auth";
 import { loadStore } from "@/lib/server/store";
 import { getOnboardingBuckets } from "@/lib/onboarding";
 import { OnboardingForm } from "./onboarding-form";
@@ -15,7 +18,7 @@ export default async function OnboardingServicePage({
   params: Promise<{ serviceSlug: string }>;
 }) {
   if (!(await isDashboardAuthed())) {
-    return <DashboardLogin />;
+    return <DashboardLogin misconfigured={dashboardAuthMisconfigured()} />;
   }
 
   const { serviceSlug } = await params;

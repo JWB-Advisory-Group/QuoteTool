@@ -40,10 +40,32 @@ describe("requireOwnerApi", () => {
   test("production mode (no PIN) — refuses with 503", async () => {
     delete process.env.DASHBOARD_PIN;
     vi.stubEnv("NODE_ENV", "production");
-    const { requireOwnerApi } = await import("@/lib/server/auth");
+    const {
+      dashboardAuthMisconfigured,
+      pinIsValid,
+      requestHasDashboardAccess,
+      requireOwnerApi,
+    } = await import("@/lib/server/auth");
     const res = requireOwnerApi(makeRequest());
+    expect(dashboardAuthMisconfigured()).toBe(true);
+    expect(requestHasDashboardAccess(makeRequest())).toBe(false);
+    expect(pinIsValid("1234")).toBe(false);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(503);
+  });
+
+  test("dev mode (no PIN) — leaves local dashboard open but does not accept login cookies", async () => {
+    delete process.env.DASHBOARD_PIN;
+    vi.stubEnv("NODE_ENV", "development");
+    const {
+      dashboardAuthMisconfigured,
+      pinIsValid,
+      requestHasDashboardAccess,
+    } = await import("@/lib/server/auth");
+
+    expect(dashboardAuthMisconfigured()).toBe(false);
+    expect(requestHasDashboardAccess(makeRequest())).toBe(true);
+    expect(pinIsValid("anything")).toBe(false);
   });
 
   test("PIN set, no cookie — returns 401", async () => {

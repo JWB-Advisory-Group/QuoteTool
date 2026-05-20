@@ -23,7 +23,7 @@ export type SubmitResult = {
 export function ResultPanel({ result }: { result: SubmitResult }) {
   const packageOptions = result.estimate.packageOptions;
   const [selectedId, setSelectedId] = useState(
-    packageOptions.find((option) => option.id === "best_value")?.id ??
+    packageOptions.find((option) => option.id === "essential")?.id ??
       packageOptions[0]?.id ??
       null,
   );

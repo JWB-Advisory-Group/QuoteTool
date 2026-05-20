@@ -1,6 +1,33 @@
-import { LockKeyhole } from "lucide-react";
+import { AlertTriangle, LockKeyhole } from "lucide-react";
 
-export function DashboardLogin({ error }: { error?: string }) {
+export function DashboardLogin({
+  error,
+  misconfigured = false,
+}: {
+  error?: string;
+  misconfigured?: boolean;
+}) {
+  if (misconfigured) {
+    return (
+      <main className="min-h-screen bg-[#f7f6f2] px-5 py-10 text-[#1d211c]">
+        <section className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col justify-center">
+          <div className="rounded-lg border border-[#f1d18a] bg-white p-6 shadow-sm">
+            <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-md bg-[#fff8e5] text-[#8a6200]">
+              <AlertTriangle size={20} />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Dashboard locked
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-[#62685f]">
+              Owner dashboard access is disabled until `DASHBOARD_PIN` is set in
+              the production environment.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f6f2] px-5 py-10 text-[#1d211c]">
       <section className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col justify-center">

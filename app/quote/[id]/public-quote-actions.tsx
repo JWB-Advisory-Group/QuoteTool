@@ -23,6 +23,7 @@ export function PublicQuoteActions({
   packageOptions,
   scheduleWindows,
   depositThreshold,
+  estimateRangeHigh,
   initialPackageId,
   initialApproval,
   surveyRequired,
@@ -35,6 +36,7 @@ export function PublicQuoteActions({
   packageOptions: QuotePackageOption[];
   scheduleWindows: ScheduleWindowOption[];
   depositThreshold: number;
+  estimateRangeHigh: number;
   initialPackageId: QuotePackageOption["id"];
   initialApproval: ApprovalRecord | null;
   surveyRequired: boolean;
@@ -263,6 +265,7 @@ export function PublicQuoteActions({
       <div className="mt-4 grid gap-3">
         {packageOptions.map((option) => {
           const selected = option.id === selectedPackageId;
+          const upgradeAboveRange = Math.max(0, option.price - estimateRangeHigh);
           return (
             <button
               key={option.id}
@@ -288,7 +291,18 @@ export function PublicQuoteActions({
                     {option.description}
                   </p>
                 </div>
-                <div className="font-semibold">{formatMoney(option.price)}</div>
+                <div className="shrink-0 text-right font-semibold">
+                  {formatMoney(option.price)}
+                  {upgradeAboveRange > 0 ? (
+                    <div className="mt-1 text-[11px] font-semibold leading-4 text-[#7a5400]">
+                      +{formatMoney(upgradeAboveRange)} upgrade
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[11px] font-semibold leading-4 text-[#547a25]">
+                      in estimate band
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="mt-3 space-y-1">
                 {option.includedServices.slice(0, 4).map((item) => (
@@ -412,7 +426,7 @@ export function PublicQuoteActions({
 
       {selectedDepositRequired ? (
         <div className="mt-4 rounded-md border border-[#f1d18a] bg-[#fff8e5] px-3 py-3 text-sm font-medium text-[#7a5400]">
-          {`A ${formatMoney(selectedDepositAmount)} deposit is collected after you approve to lock the route window. You'll be taken straight to a secure payment page.`}
+          {`A ${formatMoney(selectedDepositAmount)} deposit is needed after approval to lock the route window. We'll open or send the secure deposit step next.`}
         </div>
       ) : null}
 

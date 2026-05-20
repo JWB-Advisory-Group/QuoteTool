@@ -1,6 +1,11 @@
 import { roundToFive } from "@/lib/format";
 import { validateAddress } from "@/lib/address-validation";
 import {
+  buildCompetitivePosition,
+  buildPricingSignals,
+  buildPrecisionContext,
+} from "@/lib/pricing-precision";
+import {
   defaultDriveReserveMinutes,
   defaultServiceMinimums,
   photoRequirementsByService,
@@ -818,6 +823,18 @@ function estimateConfidenceFor(
   return "high";
 }
 
+function lowerConfidence(
+  a: PricingEstimate["estimateConfidence"],
+  b: PricingEstimate["estimateConfidence"],
+): PricingEstimate["estimateConfidence"] {
+  const rank: Record<PricingEstimate["estimateConfidence"], number> = {
+    high: 3,
+    medium: 2,
+    low: 1,
+  };
+  return rank[a] <= rank[b] ? a : b;
+}
+
 function pricingNotesFor(input: {
   rangeLow: number;
   rangeHigh: number;
@@ -828,9 +845,11 @@ function pricingNotesFor(input: {
   photoCount: number;
   serviceLines: QuoteServiceLine[];
   manualReviewReasons: string[];
+  precisionNote: string;
 }) {
   const notes = [
     "Preliminary range only. Final quote depends on access, condition, measurements, and photos.",
+    input.precisionNote,
     `Route assumption: ${input.routeZone}.`,
   ];
 
@@ -1202,8 +1221,25 @@ export function calculateEstimate(
   driveReserveMinutes = Math.max(driveReserveMinutes, route.driveMinutes);
   if (route.manualReason) allRiskReasons.add(route.manualReason);
 
+  const marketRows = getMarketRows(
+    store.competitorPrices,
+    primaryServiceSlug,
+    input.zip,
+  );
+  const precisionContext = buildPrecisionContext({
+    store,
+    serviceLines,
+    marketRows,
+  });
+  precisionContext.ownerReviewReasons.forEach((reason) =>
+    allRiskReasons.add(reason),
+  );
+
   const drive = (driveReserveMinutes / 60) * maxHourlyRate;
-  const subtotal = labor + materials + drive + equipment;
+  const rawSubtotal = labor + materials + drive + equipment;
+  const historicalReserve =
+    rawSubtotal * (precisionContext.historicalVariance.costReservePct ?? 0);
+  const subtotal = rawSubtotal + historicalReserve;
   const floor =
     subtotal * (1 + maxOverheadPct) * (1 + maxMarginPct);
   const addOnMinimums = Math.max(0, lineMinimumTotal - highestMinimum);
@@ -1211,11 +1247,6 @@ export function calculateEstimate(
   const protectedFloor = Math.max(floor, minimumFloor);
   const floorBandHigh = protectedFloor * 1.12;
 
-  const marketRows = getMarketRows(
-    store.competitorPrices,
-    primaryServiceSlug,
-    input.zip,
-  );
   const marketMedian = median(marketRows.map((row) => row.priceMedian));
   const urgencyAdjustment = urgencyAdjustments[input.urgency] ?? 1;
   const seasonDemand = seasonDemandFor();
@@ -1228,9 +1259,20 @@ export function calculateEstimate(
     : 0;
   const urgencyPremium =
     input.urgency === "asap" ? 0.1 : input.urgency === "this_week" ? 0.04 : 0;
-  const pricingAnchor = marketAnchor
+  const pricingAnchorBase = marketAnchor
     ? Math.max(marketAnchor + addOnMinimums * 0.55, floorBandHigh * 1.08)
     : floorBandHigh * (1.28 + urgencyPremium + (seasonDemand.multiplier - 1) * 0.65 - bundleEfficiency);
+  const competitivePosition = buildCompetitivePosition({
+    marketRows,
+    pricingAnchor: pricingAnchorBase,
+    floorBandHigh,
+    seasonAdjustment,
+    storyMultiplier,
+    riskMultiplier: maxRiskMultiplier,
+    addOnMinimums,
+  });
+  const pricingAnchor =
+    competitivePosition.targetPrice ?? pricingAnchorBase;
 
   const rangeLow = roundToFive(floorBandHigh);
   const recommendedAsk = roundToFive(Math.max(floorBandHigh, pricingAnchor));
@@ -1288,9 +1330,13 @@ export function calculateEstimate(
   );
   const leadQuality =
     leadScore >= 72 ? "good" : leadScore >= 50 ? "caution" : "bad";
-  const estimateConfidence = estimateConfidenceFor(
+  const scopeConfidence = estimateConfidenceFor(
     intakeRequirements.measurementConfidence,
     manualReviewReasons,
+  );
+  const estimateConfidence = lowerConfidence(
+    scopeConfidence,
+    precisionContext.confidence,
   );
   const pricingNotes = pricingNotesFor({
     rangeLow,
@@ -1302,6 +1348,7 @@ export function calculateEstimate(
     photoCount: photoAttachments.length,
     serviceLines,
     manualReviewReasons,
+    precisionNote: precisionContext.customerPricingNote,
   });
   const closeProbability = Math.max(
     15,
@@ -1340,6 +1387,11 @@ export function calculateEstimate(
     input.urgency,
     closeProbability,
   );
+  const pricingSignals = buildPricingSignals({
+    precisionContext,
+    competitivePosition,
+    blockerCount: manualReviewReasons.length,
+  });
 
   return {
     floor: roundToFive(protectedFloor),
@@ -1403,12 +1455,21 @@ export function calculateEstimate(
       input.zip,
       recommendedAsk,
     ),
+    pricingSignals,
     addressValidation,
     lineItems: [
       { label: "Labor", value: roundToFive(labor) },
       { label: "Materials", value: roundToFive(materials) },
       { label: "Drive time reserve", value: roundToFive(drive) },
       { label: "Equipment wear", value: roundToFive(equipment) },
+      ...(historicalReserve > 0
+        ? [
+            {
+              label: "Historical variance reserve",
+              value: roundToFive(historicalReserve),
+            },
+          ]
+        : []),
       { label: "Overhead + margin floor", value: roundToFive(protectedFloor) },
     ],
   };

@@ -19,6 +19,18 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+export function formatMultiplier(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "n/a";
+  }
+
+  const rounded = Number(value.toFixed(2));
+  return `${new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(rounded)}x`;
+}
+
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }

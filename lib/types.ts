@@ -243,6 +243,7 @@ export type PricingEstimate = {
   aiBlockedReason: string;
   profitability: EstimateProfitability;
   marketComparison: MarketComparison;
+  pricingSignals: PricingSignals;
   addressValidation: AddressValidation;
   lineItems: {
     label: string;
@@ -296,6 +297,36 @@ export type MarketComparison = {
   deltaPct: number;
   position: MarketPosition;
   ownerNote: string;
+};
+
+export type PricingSignals = {
+  confidence: EstimateConfidence;
+  currentInputs: {
+    services: string[];
+    sourceMix: CostInput["source"][];
+    costInputAgeDays: number | null;
+    marketDataAgeDays: number | null;
+    marketSampleSize: number;
+  };
+  historicalVariance: {
+    sampleSize: number;
+    medianLaborRatio: number | null;
+    underpricedShare: number;
+    revenueVariancePct: number | null;
+    costReservePct: number;
+    ownerNote: string;
+  };
+  competitivePosition: {
+    targetPrice: number | null;
+    ceiling: number | null;
+    adjustmentPct: number;
+    ownerNote: string;
+  };
+  quoteSpeed: {
+    automationReady: boolean;
+    blockerCount: number;
+    ownerNote: string;
+  };
 };
 
 export type AddressConfidence = "verified" | "plausible" | "unverified" | "out_of_area";

@@ -32,7 +32,11 @@ import {
 import { cleanCity, cleanZip, formatAddressLine, formatDate, formatMoney } from "@/lib/format";
 import { getAiUnlockState } from "@/lib/pricing";
 import { preferredContactLabels, propertyTypeLabels } from "@/lib/pricing-config";
-import { dashboardAuthEnabled, isDashboardAuthed } from "@/lib/server/auth";
+import {
+  dashboardAuthEnabled,
+  dashboardAuthMisconfigured,
+  isDashboardAuthed,
+} from "@/lib/server/auth";
 import {
   getCompliance,
   getSourceRoi,
@@ -52,7 +56,12 @@ export default async function DashboardPage({
 }) {
   const params = searchParams ? await searchParams : {};
   if (!(await isDashboardAuthed())) {
-    return <DashboardLogin error={params.error} />;
+    return (
+      <DashboardLogin
+        error={params.error}
+        misconfigured={dashboardAuthMisconfigured()}
+      />
+    );
   }
 
   const store = await loadStore();

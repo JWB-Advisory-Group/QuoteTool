@@ -373,6 +373,9 @@ describe("Dante-first pricing reliability", () => {
     expect(screen.getByText(/Choose your package/i)).toBeDefined();
     expect(screen.getByText(/Included and excluded/i)).toBeDefined();
     expect(screen.getAllByText(/Deposit/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Proof before booking/i)).toBeDefined();
+    expect(screen.getByText(/Before\/after record/i)).toBeDefined();
+    expect(screen.getByText(/Insurance\/license check/i)).toBeDefined();
   });
 
   test("public quote page makes photos optional but valuable", () => {
@@ -420,6 +423,9 @@ describe("Dante-first pricing reliability", () => {
       screen.getByText(/This first number is for the work you requested/i),
     ).toBeDefined();
     expect(screen.getByText(/Requested scope/i)).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Essential/i }).getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(
       screen.getByText(/Upgrades are optional add-ons, not hidden fees/i),
     ).toBeDefined();

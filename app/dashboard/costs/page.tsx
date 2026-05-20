@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { DashboardLogin } from "@/components/dashboard-login";
-import { isDashboardAuthed } from "@/lib/server/auth";
+import {
+  dashboardAuthMisconfigured,
+  isDashboardAuthed,
+} from "@/lib/server/auth";
 import { loadStore } from "@/lib/server/store";
 import { getCalibrationStats } from "@/lib/calibration";
 import { CostEditor } from "@/app/dashboard/costs/cost-editor";
@@ -10,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CostsPage() {
   if (!(await isDashboardAuthed())) {
-    return <DashboardLogin />;
+    return <DashboardLogin misconfigured={dashboardAuthMisconfigured()} />;
   }
 
   const store = await loadStore();
